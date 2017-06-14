@@ -1,0 +1,57 @@
+% Map Notation
+\newcommand{\pfun}{\rightharpoonup}
+\newcommand{\emptymap}{[]}
+\newcommand{\id}[1]{#1}
+\newcommand{\maplit}[3][\id]{\left[#1{#2\mapsto#3}\right]}
+
+% Semantic sets
+\newcommand{\sVar}{\text{\textsf{Var}}}
+\newcommand{\sExp}{\text{\textsf{Exp}}}
+\newcommand{\sVal}{\text{\textsf{Val}}}
+\newcommand{\sGraph}{\text{\textsf{Graph}}}
+\newcommand{\sUse}{\text{\textsf{Use}}}
+\newcommand{\sUsage}{\text{\textsf{Usage}}}
+\newcommand{\sMulti}{\text{\textsf{Multi}}}
+\newcommand{\sSig}{\text{\textsf{Sig}}}
+\newcommand{\sUseEnv}{\text{\textsf{UseEnv}}}
+\newcommand{\sUType}{\text{\textsf{UType}}}
+\newcommand{\sUTrans}{\text{\textsf{UTrans}}}
+\newcommand{\sTransEnv}{\text{\textsf{TransEnv}}}
+
+% Lattice
+\newcommand{\llub}{\sqcup}
+\newcommand{\lleq}{\sqsubseteq}
+\newcommand{\lless}{\sqsubset}
+\newcommand{\lTriple}[3]{\langle{}#1,#2,#3\rangle{}}
+\newcommand{\both}{\,\&\,}
+
+% Syntax
+\newcommand{\keyword}[1]{\text{\textsf{\textbf{#1}}}}
+\newcommand{\sMkPair}{\text{\textsf{(,)}}}
+\newcommand{\sApp}[2]{#1\,#2}
+\newcommand{\sLam}[2]{\lambda{}#1.\,#2}
+\newcommand{\sLet}[2]{\keyword{let}~#1~\keyword{in}~#2}
+\newcommand{\sLetRec}[2]{\keyword{letrec}~#1~\keyword{in}~#2}
+\newcommand{\sPair}[2]{(#1,#2)}
+\newcommand{\sCase}[4]{\keyword{case}~#1~\keyword{of}~\sPair{#2}{#3}\rightarrow#4}
+
+\newcommand{\bind}{x_1=e_1}
+\newcommand{\binds}{\overline{x_i=e_i}}
+
+% Co-call Graphs
+\newcommand{\edge}[2]{#1\text{---}#2}
+\newcommand{\neighbors}[2]{N_{#1}\parensalways{#2}}
+
+% Auxiliary Operators
+\newcommand{\uscore}[1][\mathunderscore]{\mathwithin{#1}{\mathunderscore}}
+\newcommand{\sfop}[1]{\mathsf{#1}}
+\newcommand{\dom}[1]{\sfop{dom}\,#1}
+\newcommand{\zap}{\sfop{zap}}
+\newcommand{\letup}[2]{#1\uparrow_{#2}{}}
+\newcommand{\letdown}[2]{#1\downarrow_{#2}{}}
+\newcommand{\liftstar}[1]{[#1]^*}
+\newcommand{\liftqm}[1]{[#1]^\sfop{?}}
+\newcommand{\cmblet}[2]{#1\ltimes#2}
+
+% Transfer function
+\newcommand{\transfer}[2]{\mathcal{T}\llbracket#1\rrbracket_{#2}}

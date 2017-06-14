@@ -1,0 +1,181 @@
+\chapter{Formal Specification}\label{sec:spec}
+
+As we are heading towards implementation considerations in~\cref{sec:impl}, we provide a formal specification of the usage analysis in this section.
+
+Despite being massively more simple than Haskells surface syntax, GHC Core still captures many details inessential to the analysis. In order to keep the mathematical formulation as concise as possible, we define the transfer function in terms of a simplified object language.
+
+\section{Object Language}\label{sec:exp}
+
+\begin{figure}
+\begin{alignat*}{2}
+x,y,z,\sMkPair &\in \sVar \\
+e &\in \sExp & {}\Coloneqq{}                    & x \\
+  &          & \mathwithin{{}\Coloneqq{}}{\mid} & \sPair{x_1}{x_2} \\
+  &          & \mathwithin{{}\Coloneqq{}}{\mid} & \sLam{x}{e} \\
+  &          & \mathwithin{{}\Coloneqq{}}{\mid} & \sApp{e}{x} \\
+  &          & \mathwithin{{}\Coloneqq{}}{\mid} & \sCase{e_s}{x_1}{x_2}{e_r} \\
+  &          & \mathwithin{{}\Coloneqq{}}{\mid} & \sLet{\bind}{e} \\
+  &          & \mathwithin{{}\Coloneqq{}}{\mid} & \sLetRec{\binds}{e} \\
+\end{alignat*}
+\caption{A simple untyped lambda calculus}
+\label{fig:exp}
+\end{figure}
+
+The formalization of the usage analysis operates on a simple untyped lambda calculus, described in \cref{fig:exp}. The only extensions are pair constructors, complemented with \keyword{case} expressions to destruct them, and possibly recursive \keyword{let} bindings. 
+We draw variable names from an abstract set $\sVar$. Of particular note is the identifier $\sMkPair$, which always refers to the pair constructor as a function of two arguments and may not be rebound by a \keyword{let} expression. 
+As is customary in both \cite{card} and \cite{callarity}, we assume administrative normal form \cite{sabry92}, so that arguments to applications can only mention identifiers. Applications to non-trivial arguments like $\sApp{e_1}{e_2}$ must be rewritten as $\sLet{x_2 = e_2}{\sApp{e_1}{x_2}}$, hence issues concerning sharing only surface while handling \keyword{let}-expressions. Any example in this chapter should assumed to be rewritten according to this rule.
+
+\section{Expression Use and Identifier Usage}
+
+\begin{figure}
+\begin{alignat*}{2}
+u   &\in \sUse   &{} \Coloneqq {}& HU \mid U \mid C^n(u) \mid U(u^*_1, u^*_2) \\
+u^* &\in \sUsage &{} \Coloneqq {}& A \mid n*u \\
+n   &\in \sMulti &{} \Coloneqq {}& 1 \mid \omega
+\end{alignat*}
+\begin{alignat*}{1}
+U(A,A)               &\equiv HU \\
+U(\omega*U,\omega*U) &\equiv U \\
+C^\omega(U)          &\equiv U
+\end{alignat*}
+\caption{A simple untyped lambda calculus}
+\label{fig:spec:dmd}
+\end{figure}
+
+
+\textbf{Usage signatures}
+
+\[
+\sigma \in \sSig ::= \bot \mid \top \mid u^* \to \sigma
+\]
+
+\textbf{Equalities}
+
+\begin{alignat*}{1}
+\omega*U \to \top &\equiv \top \\
+A \to \bot &\equiv \bot
+\end{alignat*}
+
+\textbf{Free-variable graph}
+
+\[
+\gamma \in \sGraph = \mathcal{P}(\sVar \times \sVar)
+\]
+
+\textbf{Free-variable use environment}
+
+\[
+\varphi \in \sUseEnv = \sVar \pfun \sUse
+\]
+
+\textbf{Usage types and lookup of free-variable usage}
+
+\[
+\theta \in \sUType \Coloneqq \lTriple{\gamma}{\varphi}{\sigma}
+\]
+
+\[
+\lTriple{\gamma}{\varphi}{\uscore}(x) =
+  \begin{cases}
+    A, & \text{when } x\notin \dom\varphi \\
+    1*\varphi(x), & \text{when } \edge{x}{x} \notin \gamma \\
+    \omega*\varphi(x), & \text{otherwise}
+  \end{cases}
+\]
+
+\begin{alignat*}{1}
+&\zap~{}\colon\sUType \to \sUType \\
+&\zap~\lTriple{\uscore}{\uscore}{\sigma} = \lTriple{\emptyset}{\emptymap}{\sigma}
+\end{alignat*}
+
+\textbf{Usage transformers}
+
+\[
+\tau \in \sUTrans = \sUse \to \sUType
+\]
+
+\[
+\tau^1_x~u = \lTriple{\emptyset}{\maplit{x}{u}}{\top}
+\]
+
+\[
+\tau_{\sMkPair}~u =
+  \begin{cases}
+    \lTriple{\emptyset}{\emptymap}{\bot}, & \text{when } u \lless C^1(C^1(\uscore)) \\
+    \lTriple{\emptyset}{\emptymap}{u^*_1 \to u^*_2 \to \top}, & \text{when } u = C^1(C^1(U(u^*_1,u^*_2))) \\
+    \lTriple{\emptyset}{\emptymap}{\top}, & \text{otherwise}
+  \end{cases}
+\]
+
+\textbf{Free-variable transformer environment}
+
+\[
+\rho \in \sTransEnv = \sVar \pfun \sUTrans
+\]
+
+
+\textbf{Transfer function}
+
+\begin{alignat*}{2}
+&\letup{\uscore[\tau]}{\uscore[x]} &\mathmakesamewidth[c]{=}{\colon} &\sUTrans \to \sVar \to \sUTrans \\
+&\letup{\tau}{x} &=&
+  \begin{cases}
+    \tau, & \text{when } \alpha_x = 0 \\
+    \zap\circ\tau, & \text{otherwise}
+  \end{cases}
+\end{alignat*}
+
+\begin{alignat*}{2}
+&\letdown{\uscore[\tau]}{\uscore[x]} &\mathmakesamewidth[c]{=}{\colon} &\sUTrans \to \sVar \to \sUTrans \\
+&\letdown{\tau}{x} &=&
+  \begin{cases}
+    \tau, & \text{when } \alpha_x = 0 \\
+    \tau, & \text{otherwise}
+  \end{cases}
+\end{alignat*}
+
+\begin{alignat*}{2}
+&\liftstar{\uscore[\tau]}~A &{}={}& \lTriple{\emptyset}{\emptymap}{\bot} \\
+&\liftstar{\tau}~(n*u)      &{}={}& n*(\tau~u)
+\end{alignat*}
+
+\begin{alignat*}{2}
+&\liftqm{\uscore[\tau]}~A     &{}={}& \lTriple{\emptyset}{\emptymap}{\bot} \\
+&\liftqm{\tau}~(\uscore[n]*u) &{}={}& \tau~u
+\end{alignat*}
+
+\begin{alignat*}{2}
+&\transfer{\uscore[x]}{\uscore}&\mathmakesamewidth[c]{{}={}}{\colon} &\sExp \to \sTransEnv \to \sUTrans \\
+&\transfer{x}{\rho} &{}={}&
+  \begin{cases}
+    \tau_{\sMkPair}, & \text{when } x = \sMkPair \\
+    \rho(x) \both \tau^1_x, & \text{when } x\in \dom{\rho} \\
+    \tau^1_x, & \text{otherwise}
+  \end{cases} \\
+&\transfer{\sLam{x}{e}}{\rho}\,u &{}={}&
+  \begin{cases}
+    \lTriple{\emptyset}{\emptymap}{\bot}, & \text{when } u = HU \\
+    n*\lTriple{\gamma\setminus_x}{\varphi\setminus_x}{\theta(x) \to \sigma}, & \text{where } u = C^n(u_b),~\lTriple{\gamma}{\varphi}{\sigma} = \theta = \transfer{e}{\rho}\,u_b
+  \end{cases} \\
+&\transfer{\sPair{x_1}{x_2}}{\rho} &{}={}& \transfer{\sApp{\sApp{\sMkPair}{x_1}}{x_2}}{\rho} \\
+&\transfer{\sApp{e}{x}}{\rho}\,u &{}={}& \lTriple{\gamma_e}{\varphi_e}{\sigma} \both \theta_x \\
+   &&&\text{where }
+     \lTriple{\gamma_e}{\varphi_e}{u^* \to \sigma} = \transfer{e}{\rho}\,C^1(u),~
+     \theta_x = \liftstar{\transfer{x}{\rho}}\,u^* \\
+&\transfer{\sCase{e_s}{x}{y}{e_r}}{\rho}\,u &{}={}& \theta_r\setminus_{x,y} \both \theta_s \\
+   &&&\text{where }
+     \theta_r = \transfer{e_r}{\rho}\,u,~
+     \theta_s = \transfer{e_s}{\rho}\,U(\theta_r(x),\theta_r(y)) \\
+&\transfer{\sLet{\bind}{e}}{\rho}\,u &{}={}& \cmblet{\theta}{\maplit{x_1}{\theta_1}} \\
+   &&&\text{where }
+     \tau_1 = \transfer{e_1}{\rho},~
+     \rho' = \maplit{x_1}{\letdown{\tau_1}{x_1}}\rho,~
+     \theta = \transfer{e}{\rho'},~
+     \theta_1 = \liftqm{\letup{transfer{e_1}{\rho}}{x_1}}{\theta(x_1)} \\
+&\transfer{\sLet{\binds}{e}}{\rho}\,u &{}={}& \cmblet{\theta}{\maplit[\overline]{x_i}{\theta_i}} \\
+   &&&\text{where }
+     \overline{\tau_i = \transfer{e_i}{\rho'}},~
+     \rho' = \maplit[\overline]{x_i}{\letdown{\tau_i}{x_i}}\rho,~
+     \theta = \transfer{e}{\rho}\,u \llub \transfer{\sLet{\binds}{e}}{\rho}\,u,~
+     \overline{\theta_i = \liftqm{\letup{\transfer{e_i}{\rho'}}{x_i}}\,(\theta(x_i) \both \theta(x_i))}
+\end{alignat*}
