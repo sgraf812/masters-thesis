@@ -23,9 +23,48 @@ e &\in \sExp & {}\Coloneqq{}                    & x \\
 
 The formalization of the usage analysis operates on a simple untyped lambda calculus, described in \cref{fig:exp}. The only extensions are pair constructors, complemented with \keyword{case} expressions to destruct them, and possibly recursive \keyword{let} bindings. 
 We draw variable names from an abstract set $\sVar$. Of particular note is the identifier $\sMkPair$, which always refers to the pair constructor as a function of two arguments and may not be rebound by a \keyword{let} expression. 
-As is customary in both \cite{card} and \cite{callarity}, we assume administrative normal form \cite{sabry92}, so that arguments to applications can only mention identifiers. Applications to non-trivial arguments like $\sApp{e_1}{e_2}$ must be rewritten as $\sLet{x_2 = e_2}{\sApp{e_1}{x_2}}$, hence issues concerning sharing only surface while handling \keyword{let}-expressions. Any example in this chapter should assumed to be rewritten according to this rule.
+As is customary in both \textcite{card} and \textcite{callarity}, we assume administrative normal form \parencite{sabry92}, so that arguments to applications can only mention identifiers. Applications to non-trivial arguments like $\sApp{e_1}{e_2}$ must be rewritten as $\sLet{x_2 = e_2}{\sApp{e_1}{x_2}}$, hence issues concerning sharing only surface while handling \keyword{let}-expressions. Any example in this chapter should assumed to be rewritten according to this rule.
 
-\section{Expression Use and Identifier Usage}
+\section{Expression Use, Identifier Usage and Usage Signatures}
+
+\todo{This should rather be part of the introduction}
+
+A usage analysis approximates how a use of an expression translates into a use of its subexpressions. Important analysis information includes \parencite{card}:
+\begin{enumerate}
+\item How many times is the body of a lambda expression evaluated, with respect to its defining scope?
+\item How many times is a particular thunk evaluated, with respect to its defining scope?
+\item Which components of a syntactic expression are never used, that is, absent?
+\end{enumerate}
+
+Expanding on the first two cases, observe the following program in a (possibly strict) functional language like Haskell:
+
+\begin{haskellcode}
+f1, f2 :: (Int -> Int) -> Int -> Int
+f1 k = k 42
+f2 k = k 0 + k 1
+
+res = let y = expensive 0 in f (\x -> x + y)
+res' = f (\x -> x + expensive 0)
+\end{haskellcode}
+
+On an operational level, computing the value of \hsinl{res} would first need to allocate a slot for \hsinl{y} and (in a non-strict setting) also allocate a closure for its arbitrary complex right-hand side. 
+An aggressive inliner like that of GHC would like to inline the right-hand side of \hsinl{y} into the lambda body, resulting in \hsinl{res'}. Doing so would delay allocation to the last possible moment, but also uncover further optimization opportunities. 
+Is inlining \hsinl{y} always a safe thing to do, e.g., does never worsen performance? It works out for when \hsinl{f} is \hsinl{f1}. However, when substituting \hsinl{f2}, we see that \hsinl{expensive 0} would be evaluated twice, where previously that work was shared through the binding of \hsinl{y}.
+So inlining \hsinl{y} is safe, if prior to inlining, \hsinl{y} is evaluated at most once \emph{relative to one evaluation of its defining expression} (the second point above). The single occurrence of \hsinl{y} is within the lambda body, so we need to know how often \hsinl{f} calls its argument, in order to determine if it the lambda expression is \emph{one-shot} (point one above). 
+For \hsinl{f1} and \hsinl{f2} the answer is once and twice, respectively. This corresponds directly to the usage of \hsinl{y} and instructs the inliner to inline \hsinl{y} for when \hsinl{f} is \hsinl{f1}, but refrain to do so if \hsinl{f} is \hsinl{f2}.
+
+Another example where usage information is valuable would be the following:
+
+\begin{haskellcode}
+f :: (Int, Int) -> Int
+f p = fst p + 3
+
+res = let p = (expensive 0, expensive 1) in f p
+\end{haskellcode}
+
+Assuming the inliner is unable to inline \hsinl{f}, which might happen for recursive functions
+
+As we will see in \cref{sec:expuse}, the first point is directly connected to call arity.
 
 \begin{figure}
 \begin{alignat*}{2}

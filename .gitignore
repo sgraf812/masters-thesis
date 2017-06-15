@@ -1,5 +1,6 @@
 **/*.swp
 **/*.swo
+**/_minted-build
 thesis/build
 present/build
 thesis/thesis.pdf

@@ -9,7 +9,7 @@
 \usetikzlibrary{positioning,calc,arrows}
 \usetikzlibrary{firm}
 
-\usepackage{listings}
+\usepackage{minted}
 
 \newcommand{\thesistype}[1]{\newcommand{\thethesistype}{#1}}
 \newcommand{\zweitgutachter}[1]{\newcommand{\thezweitgutachter}{#1}}
@@ -24,12 +24,11 @@
 \usepackage{csquotes} % provides \enquote{} macro for "quotes"
 
 \usepackage{amsmath}
-% \usepackage{amsthm} % load this before cleveref to get correctly named references to custom theorems
 \usepackage[labelformat=simple]{subfig}
 \usepackage[font={sf},margin=10pt,labelfont=bf]{caption}
 \usepackage{booktabs}
-% \usepackage{algorithm2e} % load before hyperref for correct links to line numbers with cleveref
 \usepackage[bookmarks=true,pdfusetitle=true]{hyperref}
+\usepackage[style=authoryear,backend=bibtex8]{biblatex}
 \hypersetup{
   pdfdisplaydoctitle=true,
   %colorlinks=true, % use this if the boxes around links bother you ;)
@@ -49,6 +48,8 @@
 \definecolor{todo}{rgb}{0.8,0,0}
 \newcommand\tod[1]{\texttt{\textcolor{todo}{#1}}}
 \newcommand\todo[1]{\par\texttt{\textcolor{todo}{#1}}\par}
+
+\bibliography{bib}
 
 %%% Title Page %%%
 
@@ -142,3 +143,8 @@
 }}
 
 \recalctypearea % necessary if e.g. somebody changes fonts
+
+%%% Haskell listings %%%
+
+\newmintinline[hsinl]{haskell}{}
+\newminted{haskell}{}
