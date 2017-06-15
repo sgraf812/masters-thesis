@@ -2,14 +2,11 @@
 
 \usepackage{microtype}
 
-\usepackage[ngerman]{babel}
-%\usepackage[ngerman,english]{babel}     % use this if your thesis is in English -- last option specifies the default language
+\usepackage[ngerman,english]{babel}     % use this if your thesis is in English -- last option specifies the default language
 
 \usepackage{tikz}
 \usetikzlibrary{positioning,calc,arrows}
 \usetikzlibrary{firm}
-
-\usepackage{minted}
 
 \newcommand{\thesistype}[1]{\newcommand{\thethesistype}{#1}}
 \newcommand{\zweitgutachter}[1]{\newcommand{\thezweitgutachter}{#1}}
@@ -20,12 +17,15 @@
 \newcommand{\myBCOR}{\the\ta@bcor}
 \makeatother
 
-% \usepackage{minted} % for code formatting -- must be loaded before csquotes
+\usepackage{listings}
+\usepackage{minted} % for code formatting -- must be loaded before csquotes
 \usepackage{csquotes} % provides \enquote{} macro for "quotes"
 
+\usepackage{amsfonts}
 \usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
 \usepackage[labelformat=simple]{subfig}
-\usepackage[font={sf},margin=10pt,labelfont=bf]{caption}
 \usepackage{booktabs}
 \usepackage[bookmarks=true,pdfusetitle=true]{hyperref}
 \usepackage[style=authoryear,backend=bibtex8]{biblatex}
@@ -116,7 +116,7 @@
       \node[below=1.3cm of table.south] (time)
       {
         \begin{tabular}{ll}
-        \textbf{Bearbeitungszeit:} & {\year=1990 \month=1 \day=1 \today} -- {\year=2000 \month=12 \day=31 \today}
+        \textbf{Bearbeitungszeit:} & {\year=2017 \month=3 \day=6 \today} -- {\year=2017 \month=8 \day=4 \today}
         \end{tabular}
       };
 
@@ -146,5 +146,33 @@
 
 %%% Haskell listings %%%
 
-\newmintinline[hsinl]{haskell}{}
-\newminted{haskell}{}
+\lstdefinestyle{Haskell}{%
+    language=Haskell,
+    basicstyle=\sffamily,
+    columns=fullflexible,
+    texcl=true,
+    literate={->}{$\to{}$}2
+        {<-}{$\leftarrow{}$}2
+        {==>}{$\implies{}$}2
+        {=>}{$\Rightarrow{}$}2
+        {\\}{$\uplambda$}1
+        {+}{{$+$}}1
+        {*}{{$*$}}1
+        {[]}{[\,]\ }1
+        {++}{{$+\!\!+$}}1,
+    keywords={%
+       case,class,data,default,deriving,do,else,%
+       foreign,if,import,in,infix,infixl,infixr,instance,%
+       let,forall,letrec,module,newtype,role,of,then,type,where,\_,%
+       nominal,representational,phantom,sub,sym,family%
+    }
+}
+\lstnewenvironment{haskellcode}{\lstset{style=Haskell}}{}
+\newcommand{\hsinl}[1]{\lstinline[style=Haskell]{#1}}
+%\newmintinline[hsinl]{haskell}{}
+%\newminted{haskell}{}
+
+%%% Examples %%%
+
+\theoremstyle{definition}
+\newtheorem*{example}{Example}

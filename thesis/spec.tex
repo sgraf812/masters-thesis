@@ -27,44 +27,16 @@ As is customary in both \textcite{card} and \textcite{callarity}, we assume admi
 
 \section{Expression Use, Identifier Usage and Usage Signatures}
 
-\todo{This should rather be part of the introduction}
-
 A usage analysis approximates how a use of an expression translates into a use of its subexpressions. Important analysis information includes \parencite{card}:
+
 \begin{enumerate}
 \item How many times is the body of a lambda expression evaluated, with respect to its defining scope?
 \item How many times is a particular thunk evaluated, with respect to its defining scope?
 \item Which components of a syntactic expression are never used, that is, absent?
 \end{enumerate}
 
-Expanding on the first two cases, observe the following program in a (possibly strict) functional language like Haskell:
-
-\begin{haskellcode}
-f1, f2 :: (Int -> Int) -> Int -> Int
-f1 k = k 42
-f2 k = k 0 + k 1
-
-res = let y = expensive 0 in f (\x -> x + y)
-res' = f (\x -> x + expensive 0)
-\end{haskellcode}
-
-On an operational level, computing the value of \hsinl{res} would first need to allocate a slot for \hsinl{y} and (in a non-strict setting) also allocate a closure for its arbitrary complex right-hand side. 
-An aggressive inliner like that of GHC would like to inline the right-hand side of \hsinl{y} into the lambda body, resulting in \hsinl{res'}. Doing so would delay allocation to the last possible moment, but also uncover further optimization opportunities. 
-Is inlining \hsinl{y} always a safe thing to do, e.g., does never worsen performance? It works out for when \hsinl{f} is \hsinl{f1}. However, when substituting \hsinl{f2}, we see that \hsinl{expensive 0} would be evaluated twice, where previously that work was shared through the binding of \hsinl{y}.
-So inlining \hsinl{y} is safe, if prior to inlining, \hsinl{y} is evaluated at most once \emph{relative to one evaluation of its defining expression} (the second point above). The single occurrence of \hsinl{y} is within the lambda body, so we need to know how often \hsinl{f} calls its argument, in order to determine if it the lambda expression is \emph{one-shot} (point one above). 
-For \hsinl{f1} and \hsinl{f2} the answer is once and twice, respectively. This corresponds directly to the usage of \hsinl{y} and instructs the inliner to inline \hsinl{y} for when \hsinl{f} is \hsinl{f1}, but refrain to do so if \hsinl{f} is \hsinl{f2}.
-
-Another example where usage information is valuable would be the following:
-
-\begin{haskellcode}
-f :: (Int, Int) -> Int
-f p = fst p + 3
-
-res = let p = (expensive 0, expensive 1) in f p
-\end{haskellcode}
-
-Assuming the inliner is unable to inline \hsinl{f}, which might happen for recursive functions
-
-As we will see in \cref{sec:expuse}, the first point is directly connected to call arity.
+GHC's Demand Analyzer integrates a usage analysis that answers these questions by the name of \emph{higher-order cardinality analysis} \parencite{card}. 
+Our analysis builds on this approach in that the central lattices have been borrowed unchanged, but have been enriched and distinguished with further semantic meaning.
 
 \begin{figure}
 \begin{alignat*}{2}
@@ -77,10 +49,83 @@ U(A,A)               &\equiv HU \\
 U(\omega*U,\omega*U) &\equiv U \\
 C^\omega(U)          &\equiv U
 \end{alignat*}
-\caption{A simple untyped lambda calculus}
-\label{fig:spec:dmd}
+\caption{Syntax of expression $\sUse$ and identifier $\sUsage$ with non-syntactic equalities.}
+\label{fig:usg}
 \end{figure}
 
+\todo{lattice ops}
+
+\Cref{fig:usg} depicts the $\sUse$ and the $\sUsage$ lattice. 
+Typical for a sharing analysis, $\sMulti$ captures usage multiplicity, of which the only interesting values in our setting are \emph{at most once} ($1$) or \emph{possibly multiple times} ($\omega$).
+
+Semantically, a $\sUse$ describes how the value of an expression is used, after evaluating it to weak head normal form (WHNF) \emph{exactly once}.
+
+\begin{itemize}
+\item $U(u^*_1, u^*_2)$ captures the $\sUsage$ of pair components (which we will explain shortly) when the expression evaluates to a pair.
+\item $C^n(u)$ suggests that the expression evaluates to a lambda expression. 
+      Additionally, the resulting value was called at most $n$ times \emph{relative to the single reduction to WHNF} and the use on the result of each call was not worse than $u$.
+\item If the value of an expression wasn't used beyond reduction to WHNF, we can attest the expression a head-use $HU$, the bottom of the lattice. 
+      Through the first non-syntactic equality in \cref{fig:usg}, $HU$ is identical to a pair use of $U(A,A)$. 
+      This arises naturally when, beyond reduction to the pair constructor, no components of the value were used.
+      Other than that, $HU$ can only be unleashed on the first argument of a call to the binary primitive \hsinl{seq}.
+      Since \hsinl{seq} can be applied to arguments of any type, expressions of function type can also be head-used.
+      When a function expression is in head-use, evaluation will stop immediately after uncovering the outer lambda, the body will not be used.
+      This corresponds to a hypothetical ill-typed use $C^0(\uscore)$, meaning the lambda is called 0 times relative to the single reduction of the function expression to WHNF.
+\item The most conservative analysis result would be the top of the lattice $U$, representing an unknown use beyond reduction to WHNF.
+      Where this differs from head-use is best understood in terms of the attached equalities in \cref{fig:usg}.
+      For an expression that evaluates to a pair, unknown use would correspond to the pair use $U(\omega*U,\omega*U)$, e.g.\ the pair components have the worst possible usage.
+      A unknown use on a function expression can be interpreted as a use of $C^\omega(U)$ by the last equality. 
+      By our reasoning above, $C^\omega(U)$ is a call use where the reduced lambda expression is called possibly more than once relative to its single reduction to WHNF and where the result of the call is used according to $U$.
+\end{itemize}
+
+The syntax for call uses $C^n(u)$ allows to model \emph{multiple} calls of a function expression relative to a \emph{single} reduction to WHNF. 
+Yet it is still unclear how expressions can be used in such a way. 
+We would need to \emph{share} the work done by reducing the a function expression to WHNF, so that we can call the resulting value at least twice.
+Such sharing can be introduced by binding an expression to an identifier. 
+By referring to the bound expression through the identifier, we can call the same expression multiple times, while the reduction of the bound expression to WHNF only happens (at most) once. 
+Generally, there are various ways to bind an expression to an identifier. 
+However, our simple object language was carefully crafted so that sharing is always introduced through \keyword{let}-bindings. 
+Other binding mechanisms like lambdas and \keyword{case} just alias another binding. 
+
+It is inappropriate to model usage of an identifier with $\sUse$, as identifiers can syntactically occur more than once, or even be absent. 
+Yet every use site, or \emph{usage}, unleashes a $\sUse$ on the identifier's bound expression. 
+Thus, every identifier has an associated $\sUsage$, that describes how often and how, if at all, the identifier was used.
+
+\begin{itemize}
+\item An identifier $\sUsage$ of $A$ represents \emph{absence} of any usage. Right-hand sides of absent bindings are dead code and never used.
+\item A $\sUsage$ of $n*u$ represents that the associated identifier was used at most $n$ times, putting its bound expression under combined use $u$.
+\end{itemize}
+
+A few examples are instructive in understanding the definitions so far.
+
+\begin{example} 
+Consider the following Haskell expression:
+
+\begin{haskellcode}
+let a = f 0 
+in let b = f 1 
+   in case (a, b) of
+        (x, y) -> y
+\end{haskellcode}
+
+If we put the expression under some use $U$, we find out the following facts by backtracing evaluation:
+
+\begin{itemize}
+\item The case binder \hsinl{y} has usage $1*U$, \hsinl{x} is absent ($A$).
+\item The usage on case binders translate to a pair use on \hsinl{(a,b)} of $U(A,1*U)$.
+\item The pair constructor forwards its component usages to identifier usages for \hsinl{a} ($A$) and \hsinl{b} ($1*U$).
+\item Since we recorded a usage of $1*U$ for \hsinl{b}, we put the right-hand side of the binding under use $U$. 
+      One call to a single argument results in a usage of $1*C^1(U)$ on \hsinl{f}.
+\item We recognize that the binding for \hsinl{a} is dead, so we don't need to look at its right-hand side at all.
+\end{itemize}
+\end{example}
+
+In a lazy language with \hsinl{seq} it makes sense to distinguish \emph{use} from \emph{demand} \parencite[Appendix~C.2]{warnsbrough} resp. \emph{call} from \emph{evaluation} \parencite[Section~2.5]{card}, we introduce $\sUsage$ of an identifier.
+
+
+\todo{mention \textcite{card}'s reasoning for \hsinl{seq} and (multi-)demands}
+
+\todo{mention \textcite{wansbrough}'s glossary and how we define our own}
 
 \textbf{Usage signatures}
 
