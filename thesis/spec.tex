@@ -23,9 +23,13 @@ e &\in \sExp & {}\Coloneqq{}                    & x \\
 
 The formalization of the usage analysis operates on a simple untyped lambda calculus, described in \cref{fig:exp}. The only extensions are pair constructors, complemented with \keyword{case} expressions to destruct them, and possibly recursive \keyword{let} bindings. 
 We draw variable names from an abstract set $\sVar$. Of particular note is the identifier $\sMkPair$, which always refers to the pair constructor as a function of two arguments and may not be rebound by a \keyword{let} expression. 
-As is customary in both \textcite{card} and \textcite{callarity}, we assume administrative normal form \parencite{sabry92}, so that arguments to applications can only mention identifiers. Applications to non-trivial arguments like $\sApp{e_1}{e_2}$ must be rewritten as $\sLet{x_2 = e_2}{\sApp{e_1}{x_2}}$, hence issues concerning sharing only surface while handling \keyword{let}-expressions. Any example in this chapter should assumed to be rewritten according to this rule.
+As is customary in both \textcite{card} and \textcite{callarity}, we assume A-normal form \parencite{anf}, so that arguments to applications can only mention identifiers. Applications to non-trivial arguments like $\sApp{e_1}{e_2}$ must be rewritten as $\sLet{x_2 = e_2}{\sApp{e_1}{x_2}}$, hence issues concerning sharing only surface while handling \keyword{let}-expressions. Any example in this chapter should assumed to be rewritten according to this rule.
 
-\section{Expression Use, Identifier Usage and Usage Signatures}
+\section{Analysis domain}
+
+\todo{text}
+
+\subsection{Expression Use and Identifier Usage}
 
 A usage analysis approximates how a use of an expression translates into a use of its subexpressions. Important analysis information includes \parencite{card}:
 
@@ -35,7 +39,7 @@ A usage analysis approximates how a use of an expression translates into a use o
 \item Which components of a syntactic expression are never used, that is, absent?
 \end{enumerate}
 
-GHC's Demand Analyzer integrates a usage analysis that answers these questions by the name of \emph{higher-order cardinality analysis} \parencite{card}. 
+GHC's Demand analyser integrates a usage analysis that answers these questions by the name of \emph{higher-order cardinality analysis} \parencite{card}. 
 Our analysis builds on this approach in that the central lattices have been borrowed unchanged, but have been enriched and distinguished with further semantic meaning.
 
 \begin{figure}
@@ -74,8 +78,8 @@ Semantically, a $\sUse$ describes how the value of an expression is used, after 
 \item The most conservative analysis result would be the top of the lattice $U$, representing an unknown use beyond reduction to WHNF.
       Where this differs from head-use is best understood in terms of the attached equalities in \cref{fig:usg}.
       For an expression that evaluates to a pair, unknown use would correspond to the pair use $U(\omega*U,\omega*U)$, e.g.\ the pair components have the worst possible usage.
-      A unknown use on a function expression can be interpreted as a use of $C^\omega(U)$ by the last equality. 
-      By our reasoning above, $C^\omega(U)$ is a call use where the reduced lambda expression is called possibly more than once relative to its single reduction to WHNF and where the result of the call is used according to $U$.
+      A unknown use on a function expression can be interpreted as a use of $C^\omega(U)$ by the last equality: 
+      We don't know how the resulting function will be used, so we have to assume multiple calls, each with unknown use. 
 \end{itemize}
 
 The syntax for call uses $C^n(u)$ allows to model \emph{multiple} calls of a function expression relative to a \emph{single} reduction to WHNF. 
@@ -115,48 +119,175 @@ If we put the expression under some use $U$, we find out the following facts by 
 \item The usage on case binders translate to a pair use on \hsinl{(a,b)} of $U(A,1*U)$.
 \item The pair constructor forwards its component usages to identifier usages for \hsinl{a} ($A$) and \hsinl{b} ($1*U$).
 \item Since we recorded a usage of $1*U$ for \hsinl{b}, we put the right-hand side of the binding under use $U$. 
-      One call to a single argument results in a usage of $1*C^1(U)$ on \hsinl{f}.
+      One call with a single argument results in a usage of $1*C^1(U)$ on \hsinl{f}.
 \item We recognize that the binding for \hsinl{a} is dead, so we don't need to look at its right-hand side at all.
 \end{itemize}
 \end{example}
 
-In a lazy language with \hsinl{seq} it makes sense to distinguish \emph{use} from \emph{demand} \parencite[Appendix~C.2]{warnsbrough} resp. \emph{call} from \emph{evaluation} \parencite[Section~2.5]{card}, we introduce $\sUsage$ of an identifier.
+We just saw a single call usage $1*C^1(U)$ on a free variable \hsinl{f}. 
+The following expressions hints at the fact that, in general, right-hand sides of bindings can be put under call uses $C^n_1(C^n_2(\ldots C^n_k(U)\ldots))$ for any $n_i\in\sMulti$.
+This is through exploiting currying and sharing through bindings.
 
+\begin{example} 
+Consider the multi-call case first:
 
-\todo{mention \textcite{card}'s reasoning for \hsinl{seq} and (multi-)demands}
+\begin{haskellcode}
+f 0 0 + f 1 1
+\end{haskellcode}
 
-\todo{mention \textcite{wansbrough}'s glossary and how we define our own}
+This demonstrates how multi-call uses can be introduced. 
+A use of $U$ on the expression manifests in two sequential usages $1*C^1(C^1(U))$ of \hsinl{f}, each corresponding so a single call with two arguments. 
+These combine to an identifier usage of $\omega*C^\omega(C^1(U))$: 
+After all, the lambda expression the function bound to \hsinl{f} reduces to is called twice, resulting in two (non-shared!) values. 
+In each case, these function values are immediately called with one argument.
 
-\textbf{Usage signatures}
+The following snippet illustrates how multi-calls can be shifted further down the chain of call uses:
 
-\[
-\sigma \in \sSig ::= \bot \mid \top \mid u^* \to \sigma
-\]
+\begin{haskellcode}
+let g = f 0
+in g 0 0 + g 1 0
+\end{haskellcode}
 
-\textbf{Equalities}
+When this expression is put under use $U$, the subexpression \hsinl{g 1 0 + g 1 0} will expose \hsinl{g} to a usage of $\omega*C^\omega(C^1(U))$, similar to the previous situation.
+The expression bound to \hsinl{g} is thus used with $C^\omega(C^1(U))$. Itself being a partial application, the bound right-hand side will subject \hsinl{f} to a usage of $1*C^1(C^\omega(C^1(U)))$.
+\end{example}
 
+The $\sUsage$ multiplicity $n*\uscore$ represents how often a given thunk is evaluated. 
+Of course, since thunks promise that the bound expression will be reduced to WHNF at most once, after the first evaluation the value will be \emph{memoised} and returned for each subsequent evaluation of the thunk.
+As \textcite[Section~2.4]{card} points out, the ritual around memoisation is superfluous if the thunk is not evaluated more than once anyway!
+In these cases of \emph{single-entry} thunks, GHC exploits that call-by-need coincides with a leaner call-by-name evaluation strategy.
+
+As the remarks in \textcite[Section~2.5]{card} point out, in a non-strict language with the \hsinl{seq} primitive, it is even possible for functions to be \emph{evaluated} multiple times, yet \emph{called} only once.
+If an expression like \hsinl{seq f (f 3)} is put under use $U$, this exposes \hsinl{f} to a usage of $\omega*C^1(U)$: \hsinl{f} is evaluated multiple times, yet called only once.
+This is the same argument that \textcite[Appendix~C.2]{warnsbrough} makes with their language of \emph{use} vs. \emph{demand}.
+
+\todo{lattice ops}
+
+\subsection{Usage signatures}
+
+In the last section we developed vocabulary for describing how an expression is used and to which usage a used expression exposes its free variables. Things don't look so well across function boundaries, though:
+
+\begin{haskellcode}
+let f k = 2 * k 5
+in let g x = x + 3 
+   in f g
+\end{haskellcode}
+
+If this is put under the typical use $U$, closer look reveals that \hsinl{k} is used as a continuation inside \hsinl{f}, e.g.\ has the one-shot usage $1*C^1(U)$.
+By beta reduction, this is also the usage that \hsinl{f g} exposes \hsinl{g} to.
+How do we digest that information in a way that it is available at the call site of \hsinl{f}?
+
+We follow the approach from \textcite{card} and ascribe \emph{usage signatures} to function expressions. Their definition can be seen in \cref{fig:sig}.
+
+\begin{figure}
+\begin{alignat*}{2}
+\sigma &\in \sSig &{} \Coloneqq {}& \bot \mid \top \mid u^* \to \sigma
+\end{alignat*}
 \begin{alignat*}{1}
 \omega*U \to \top &\equiv \top \\
-A \to \bot &\equiv \bot
+A \to \bot        &\equiv \bot
 \end{alignat*}
+\caption{Syntax of usage signatures and associated non-syntactic equalities.}
+\label{fig:sig}
+\end{figure}
 
-\textbf{Free-variable graph}
+Equipped with the right language, we would give assign the following usage signatures to \hsinl{f} and \hsinl{g}:
 
+\begin{haskellcode}
+f :: ß$1*C^1(U) \to \top$ß
+g :: ß$1*U \to \top$ß
+\end{haskellcode}
+
+The non-syntactic identities in \ref{fig:sig} hint at the fact that usage signatures can be expanded to include arbitrary many arguments (although these are usually prohibited through the type system). 
+This is helpful in situations where we only have a usage signature to a call with less arguments available. 
+
+In any case, $\top$ as a usage signature is always a safe conservative approximation. 
+The opposite applies to $\bot$, which expands to an infinite sequence of absent usages. 
+Where is $\bot$ useful? 
+Apart from giving the lattice a least element and thus an identity to the least upper bound operator $\llub$, it arises in error conditions and non-termination. 
+Specifically, GHC's primitive \hsinl{raise#} has the usage signature $\omega*U \to \bot$.
+
+Similary, usage signatures elegantly abstract from the myriad of primitive operators in GHC.
+For another notworthy example, the \hsinl{seq} operator would have a usage signature of $1*HU \to 1*U \to \top$.
+
+\subsection{Free-variable graph}\label{sec:graph}
+
+\todo{Move this to a prior chapter introducing Call Arity}
+
+Central to GHC's \emph{Call Arity} analysis \parencite{callarity} is an undirected, non-transitive, graph datastructure, representing a called-with relationship between free-variables.
+Such a co-call graph would contain an edge between two free-variables, if it is at all possible that the variables could be evaluated \emph{simultaneously}, in the same evaluation of their containing expression, that is.
+Self-edges in co-call graphs correpond to a usage multiplicity of $\omega$, \eg multiple evaluations.
+
+\Cref{fig:graph} introduces the formal definition for $\sGraph$ and nice syntax for talking about edges within them.
+
+\begin{figure}
 \[
 \gamma \in \sGraph = \mathcal{P}(\sVar \times \sVar)
 \]
+\[
+\edge{x_1}{x_2}\in\gamma \Leftrightarrow (x_1,x_2) \in \gamma
+\]
+\caption{Free-variable $\sGraph$s and syntax for containment of edges.}
+\label{fig:graph}
+\end{figure}
 
-\textbf{Free-variable use environment}
+The cases where co-call graphs yield better results than the usual usage analyses can be boiled down to the following example:
 
+\begin{haskellcode}
+let x = expensive 0
+in let y = 2*x
+   in if b 
+      then x 
+      else y
+\end{haskellcode}
+
+The co-call graph for the \hsinl{if} expression crucially \emph{does not} contain an edge \edge{x}{y}, since usages of both variables can never happen in the same evaluation of the expression.
+Knowing that \hsinl{x} is not forced together with \hsinl{y}\footnote{Prior to looking at the right-hand side of \hsinl{y} is, of course.}, we save a self-edge on \hsinl{x} after analysing the right-hand side of \hsinl{y}.
+
+Consequently, \hsinl{x} is recognized of only being evaluated once. 
+Other usage analyses like that of GHC's Cardinality Analysis \parencite{card} only model self-loops in the underlying co-call structure (\eg usage multiplicity), so they would fail to recognize the absent edge between \hsinl{x} and \hsinl{y} and conservatively assume \hsinl{x} to be called more than once.
+
+\todo{Mention that this only happens for thunks, or refer to where this is written}
+
+We enrich the \emph{usage types} of GHC's Cardinality Analysis \parencite{card} with co-call graphs in order to generalise both (c.f. \cref{sec:generalise}).
+
+\subsection{Free-variable use environment}\label{sec:useenv}
+
+Another key ingredient of the analysis domain is an environment in which we track usages of free variables.
+While \textcite{card} encode these directly with a mapping from free variables to usages (\emph{multi-demands} in their language), we track usage multiplicity separately in a co-call graph (\cref{sec:graph}).
+
+Thus, we define use environments as partial functions\footnote{Indicated by $\pfun$, following syntax from the Isabelle proof assistant's library ecosystem} from free variables $\sVar$ to the $\sUse$ their bound expression is put under:
 \[
 \varphi \in \sUseEnv = \sVar \pfun \sUse
 \]
+We write $\dom \varphi$ for the domain of the use environment (or any partial function for that matter).
 
-\textbf{Usage types and lookup of free-variable usage}
+To see how we can recover free-variable $\sUsage$ from a combination of co-call graph and use environment, see \cref{sec:utype}.
+
+\subsection{Usage types and lookup of free-variable usage}\label{sec:utype}
+
+The usage signature mechanism captures all relevant argument usage information for imported global functions.
+For local identifiers, there's more relevant information, however.
+Consider the following expression:
+
+\begin{haskellcode}
+let f x = x + y
+in f y
+\end{haskellcode}
+
+If put under use $U$, this evaluates \hsinl{y} twice, \eg exposes it to usage $\omega*U$.
+That is because \hsinl{y} also has a use site within the function expression bound to \hsinl{f}.
+
+So, in addition to a usage signature, a \emph{usage type} should also include what usage a function exposes its free variables to\footnote{We diverge a little from \textcite{card} here, which define usage types as synonymous to a usage signature.}.
+Lucky we, having just developed the appropriate structures to capture this!
+
+We define usage types as triples of a co-call graph $\gamma$ (\cref{sec:graph}) and use environment $\varphi$ (\cref{sec:useenv}) for free variables, as well as a usage signature $\sigma$ to capture usage of possible arguments:
 
 \[
 \theta \in \sUType \Coloneqq \lTriple{\gamma}{\varphi}{\sigma}
 \]
+
+As hinted at in \cref{sec:useenv}, we can recover free variable usage in the interplay of co-call graph and use environment, denoted by the following lookup syntax:
 
 \[
 \lTriple{\gamma}{\varphi}{\uscore}(x) =
@@ -167,20 +298,209 @@ A \to \bot &\equiv \bot
   \end{cases}
 \]
 
-\begin{alignat*}{1}
-&\zap~{}\colon\sUType \to \sUType \\
-&\zap~\lTriple{\uscore}{\uscore}{\sigma} = \lTriple{\emptyset}{\emptymap}{\sigma}
-\end{alignat*}
+In our above example, \hsinl{f} has the usage type $\lTriple{\emptyset}{\maplit{y}{U}}{1*U \to \top}$.
+Notably, the co-call graph is empty, while the use environment attests \hsinl{y} a use of $U$.
+By the rules of usage lookup, this corresponds to usage of $1*U$ exposed on \hsinl{y}.
 
-\textbf{Usage transformers}
+In fact, a usage type describes how a use on an \emph{expression} translates into usages on arguments and free variables.
+So while it is convenient to think of \emph{identifiers} like \hsinl{f} having a usage type, it neglects that work is shared between multiple usages:
+
+\begin{haskellcode}
+let x = 5*y
+in x + x
+\end{haskellcode}
+
+If put under use $U$, this expression exposes \hsinl{x} to usage $\omega*U$. 
+The usage type of \hsinl{x} (or, rather its bound expression) exposes \hsinl{y} to usage $1*U$.
+This suggests that \hsinl{y} will be exposed to usage $\omega*U$ in the whole expression because of the two uses of \hsinl{x}, which is too conservative:
+The binding of \hsinl{x} will share the reduction to WHNF of its right-hand side, exposing \hsinl{y} to a single usage of $1*U$.
+
+We will revisit this when discussing analysis of \keyword{let}-bindings.
+
+\subsection{Usage transformers}\label{sec:utrans}
+
+When talking about how an expression uses its free variables, we so far always did presuming a certain use we put the expression under.
+
+To understand why, the following example is instructive:
+
+\begin{haskellcode}
+let x = expensive 0
+in let y = expensive 1
+   in (x, y)
+\end{haskellcode}
+
+If put under head use $HU$, this would not expose \hsinl{x} or \hsinl{y} to any usage, thus there are no calls to \hsinl{expensive}.
+When put under use $U$ however, both \hsinl{x} and \hsinl{y} are exposed to usage $\omega*U$, in turn calling \hsinl{expensive} twice.
+That can make a huge difference in computational work, so it is important to always include the use which an expression is put under.
+
+So, the appropriate way to denote a syntactic expression in terms of usage information is in the form of \emph{usage transformers}\footnote{\textcite{card} define these as \emph{generalised} demand transformers, while their notion of ordinary demand transformers best corresponds to an approximation of our usage transformers}:
 
 \[
 \tau \in \sUTrans = \sUse \to \sUType
 \]
 
+When denoting expressions, usage transformers map a $\sUse$ the expression is put under to a usage type that describes how the expression uses its arguments and free variables.
+
+Usage transformers of expressions are monotone maps, in line with the intuition that the stronger the use you put an expression under, the stronger is the usage it exposes arguments and free variables to.
+
+\section{Transfer function}\label{sec:transfer}
+
+Equipped with the proper language to talk about usage, in this section we associate a denoting usage transformer to a syntactic expression of our object language $\sExp$.
+
+The typical way to do so is via a \emph{transfer function} from expressions to the abstract domain the analysis operates on.
+\emph{Abstract interpretation} is the underlying scheme here: We interpret an expression in the approximate semantics of usage transformers.
+Usage analysis has also been approached via \emph{type inference} in the past \parencite{warnsbrough}, \parencite{verstoep}.
+
+The following subsections will introduce the different cases of the central transfer function
+
+\[
+\transfer{\uscore[x]}{\uscore} \colon \sExp \to \sTransEnv \to \sUTrans
+\]
+
+Where $\sTransEnv$ is an environment mapping local \keyword{let} binders to their denoting usage transformer to be unleashed on use sites:
+
+\[
+\rho \in \sTransEnv = \sVar \pfun \sUTrans
+\]
+
+\subsection{Lambda Abstraction}
+
+\todo{$*$, $\setminus_x$}
+
+Let's start by discussing analysis of lambda expressions:
+
+\[
+\transfer{\sLam{x}{e}}{\rho}\,u =
+  \begin{cases}
+    \lTriple{\emptyset}{\emptymap}{\bot}, & \text{when } u = HU \\
+    n*\lTriple{\gamma\setminus_x}{\varphi\setminus_x}{\theta(x) \to \sigma}, & \text{where } 
+      \begin{array}{l}
+        u \lleq C^n(u_b), \\
+        \lTriple{\gamma}{\varphi}{\sigma} = \theta = \transfer{e}{\rho}\,u_b
+      \end{array}
+  \end{cases}
+\]
+
+If the expression is only put under head use, no call happens and there is no need to analyze the lambda body.
+Consequently, in that case we can return the $\bot$ element of the $\sUType$ lattice, reflecting no free variable usage and no use of arguments.
+Note this only happens in the wild in conjunction with the \hsinl{seq} primitive. 
+For example in \hsinl{seq (\\x -> y) 3}, the lambda will be exposed to a head use, while \hsinl{3} will be fully used.
+
+In the other case, we try to approximate the incoming use $u$ by a call use $C^n(u_b)$. 
+We'd like that $u$ is some kind of call use, but if you give a programmer enough rope to hang herself (\eg \hsinl{unsafeCoerce}) to bypass the type system, it is possible for $u$ to be incomparable to a call use, \ie $U(1*U)$. 
+In this case, the pattern match in the definition would be incomplete.
+Thus the slightly less precise, yet still sound notation using $\lleq$: 
+In these cases, $u$ always compares to the bottom element $U=C^\omega(U)$.
+With some more notation we could have made clear that we want the least upper bound of $u$ that is a call use.
+
+Having figured out $u_b$, the use the body is put under, we can transform this use by analysing the lambda body.
+The resulting usage type $\theta=\lTriple{\gamma}{\varphi}{\sigma}$ needs to be post-processed. 
+For one, we need to remove the free variable \hsinl{x} from the type, that is captured by lambda binder.
+We also need to prepend the usage on the captured identifier to the usage signature which we forward from the body.
+At this point, an implementation of the analysis would want to annotate the lambda binder with its usage $\theta(x)$.
+Finally, we have to multiply the usage type by the relative body usage $n$.
+
+\subsection{Application and Pairs}\label{sec:app}
+
+The application case $\sApp{e}{x}$ will have to handle the called expression $e$ first to find out the usage signature and then expose $x$ to the argument usage:
+
+\begin{alignat*}{2}
+  \transfer{\sApp{e}{x}}{\rho}\,u &=&& \lTriple{\gamma_e}{\varphi_e}{\sigma} \both \liftstar{\transfer{x}{\rho}}\,u^* \\
+  &\rlap{ where $\lTriple{\gamma_e}{\varphi_e}{u^* \to \sigma} = \transfer{e}{\rho}\,C^1(u)$} &&\\
+\end{alignat*}
+
+For an incoming use $u$ we put $e$ under a single call use of $C^1(u)$. 
+In the resulting usage type, we match on the usage signature to get out the argument usage $u^*$ we expose $x$ to.
+Since the domain of usage transformers is concerned with expression $\sUse$, we have to provide an function lifting the domain of usage transformers to $\sUsage$s.
+This is done by $\liftstar{\uscore}{\uscore}$:
+
+\begin{alignat*}{2}
+&\liftstar{\uscore[\tau]}~A &{}={}& \lTriple{\emptyset}{\emptymap}{\bot} \\
+&\liftstar{\tau}~(n*u)      &{}={}& n*(\tau~u)
+\end{alignat*}
+
+The syntax here is reminiscent of the Kleene star, multiplying the result of $\tau$ by the usage multiplicity. Notably, if $e$ doesn't use its argument, then $u^*=A$ and $x$ will be exposed to no usage at all.
+
+Finally, we sequentially compose the result of using $e$ with the usage type that the lifted usage transformer of $x$ yielded for an exposure to $u^*$. 
+After all, both usage types are unleashed in order to satisfy the use on $\sApp e x$.
+Note that $\both$ is left-biased with respect to the usage signature.
+Therefore the signature of the whole application expression is that of $e$, relieved by the usage of $x$. 
+
+The seemingly unrelated case of pair literals is handled by the same application mechanism:
+
+\[
+\transfer{\sPair{x_1}{x_2}}{\rho} = \transfer{\sApp{\sApp{\sMkPair}{x_1}}{x_2}}{\rho}
+\]
+
+Representative for any product type, we handle pairs as applications to a special identifier for the pair constructor, $\sMkPair$.
+As mentioned in \cref{sec:exp}, $\sMkPair$ is special in that it cannot be rebound (\eg shadowed) by \keyword{let}-bindings.
+
+Although desugaring pairs in such a way is a nice way to keep the definition short, it is worth pointing out that the complexity is just delegated to the usage transformer for the $\sMkPair$ identifier, which will have to provide an appropriate usage signature. 
+We will handle this in the variable case.
+
+\subsection{Case expression}
+
+The limited \keyword{case}-expressions of our object language serve the sole purpose of desctructuring pairs.
+
+We denote it with a usage transformer that makes it evident that we are dealing with a \emph{backwards analysis}:
+
+\begin{alignat*}{2}
+\transfer{\sCase{e_s}{x}{y}{e_r}}{\rho}\,u &{}={}& \theta_r\setminus_{x,y} \both \transfer{e_s}{\rho}\,U(\theta_r(x),\theta_r(y)) \\
+   &\rlap{ where $\theta_r = \transfer{e_r}{\rho}\,u$} &&
+\end{alignat*}
+
+Observe from the flow of information that in order to analyze the scrutinee $e_s$, we first have to analyze the (in general:\ every) case branch $e_r$. 
+Case statements are Haskell's basic construct to specify evaluation order: 
+A typical operational semantics would first analyze the scrutinee, then choose the appropriate case branch.
+
+The denoting usage transformer will apply the incoming use to the case branch.
+In the resulting usage type $\theta_r$ we can look up the usage the product component binders $x$ and $y$ are exposed to.
+Based on that, we can formulate the use on the scrutinee as $U(\theta_r(x), \theta_r(y))$.
+
+Finally, we sequentially compose the usage type of the case alternative (purged of the case binders) with the usage type of the scrutinee under the calculated use.
+The left argument to $\both$ is $\theta_r$ since the resulting usage signature should be that of the case alternative, rather than that of the scrutinee.
+
+\subsection{Variables}\label{sec:var}
+
+For the variable case, we want the following things to happen:
+
+\begin{itemize}
+\item Note the single evaluation of $x$. We need this information for annotating identifiers, as well as analysing bound expressions later on.
+\item For any free variables, track to what usage the use on $x$ exposes them to. This is important for \keyword{let}-bound identifiers.
+\item Tack a proper usage signature onto the usage type in the case of call uses.
+\end{itemize}
+
+We begin with an auxiliary transformer that captures the first point. 
+This is the definition for $\tau^1_x$, the transformer putting the variable $x$ once under the incoming use $u$:
+
 \[
 \tau^1_x~u = \lTriple{\emptyset}{\maplit{x}{u}}{\top}
 \]
+
+Co-call graph and use environment convey that $x$ is exposed to usage $1*u$, while $\top$ is always a sound approximation to argument usage without knowing more about $x$.
+
+With that in mind, we can have a look at the transfer function for variables:
+
+\[
+\transfer{x}{\rho} =
+  \begin{cases}
+    \tau_{\sMkPair}, & \text{when } x = \sMkPair \\
+    \rho(x) \both \tau^1_x, & \text{when } x\in \dom{\rho} \\
+    \tau^1_x, & \text{otherwise}
+  \end{cases}
+\]
+
+Ignoring the first two cases for a moment, the default case denotes the single use of $x$ with $\tau^1_x$.
+
+However for \keyword{let}-bound identifiers, which are handled by the second case, we can do better than that. 
+
+For every \keyword{let}-binder, we have a usage transformer denoting its bound expression available in $\rho$.
+The (potential) call to $x$ is approximated by unleashing that usage transformer at the call site.
+This is analogous to the \textsc{LetDn} rule in \textcite{card} and comes with the same trade-off, discussed in \cref{sec:let}.
+We still have to remember the call to $x$ and do so by sequentially composing with $\tau^1_x$.
+Recall that the sequential composition operator $\both$ is left-biased with respect to the usage signature, so the result will have the signature of $\rho(x)$ instead of $\top$.
+
+The remaining first case handles calls to the pair constructor $\sMkPair$ by delegating to another auxiliary usage transformer $\tau_{\sMkPair}$:
 
 \[
 \tau_{\sMkPair}~u =
@@ -191,14 +511,31 @@ A \to \bot &\equiv \bot
   \end{cases}
 \]
 
-\textbf{Free-variable transformer environment}
+As mentioned in \cref{sec:app}, we desugar pair literals as binary applications to the pair constructor $\sMkPair$.
 
-\[
-\rho \in \sTransEnv = \sVar \pfun \sUTrans
-\]
+Information on free variable usage is uninteresting for constructors, in contrast to their usage signatures.
 
+When the incoming use is less than $C^1(C^1(U))$ (\eg $C^1(HU)$), we are dealing with a partial constructor application. 
+In that case, the components of the pair are unused and we propagate back a usage signature of $\bot$.
 
-\textbf{Transfer function}
+For the second case it is illustrative to consider an application to the pair constructor like $\sApp{\sApp{\sMkPair}{x}}{y}$.
+
+If put under use $U(1*U, A)$, we want the component usages to propagate to $x$ and $y$ through a usage signature announced by $\sMkPair$.
+What is the use that $\sMkPair$ is put under? 
+The use on the whole application, wrapped in two single shot calls, $C^1(C^1(U(1*U, A))$.
+For this specific incoming use, we want the transformer denoting $\sMkPair$ to have a usage signature of $1*U \to A \to \bot$.
+In general, for saturated single calls with arity at least as high as the data constructor's (that of pairs is two), we can propagate the usage of the pair components in the usage signature.
+
+The last case handles all other incoming uses with a conservative usage signature of $\top$.
+
+\subsection{Non-recursive Let}\label{sec:let}
+
+\subsection{Recursive Let}\label{sec:let}
+
+\begin{alignat*}{1}
+&\zap~{}\colon\sUType \to \sUType \\
+&\zap~\lTriple{\uscore}{\uscore}{\sigma} = \lTriple{\emptyset}{\emptymap}{\sigma}
+\end{alignat*}
 
 \begin{alignat*}{2}
 &\letup{\uscore[\tau]}{\uscore[x]} &\mathmakesamewidth[c]{=}{\colon} &\sUTrans \to \sVar \to \sUTrans \\
@@ -219,37 +556,17 @@ A \to \bot &\equiv \bot
 \end{alignat*}
 
 \begin{alignat*}{2}
-&\liftstar{\uscore[\tau]}~A &{}={}& \lTriple{\emptyset}{\emptymap}{\bot} \\
-&\liftstar{\tau}~(n*u)      &{}={}& n*(\tau~u)
-\end{alignat*}
-
-\begin{alignat*}{2}
 &\liftqm{\uscore[\tau]}~A     &{}={}& \lTriple{\emptyset}{\emptymap}{\bot} \\
 &\liftqm{\tau}~(\uscore[n]*u) &{}={}& \tau~u
 \end{alignat*}
 
 \begin{alignat*}{2}
-&\transfer{\uscore[x]}{\uscore}&\mathmakesamewidth[c]{{}={}}{\colon} &\sExp \to \sTransEnv \to \sUTrans \\
 &\transfer{x}{\rho} &{}={}&
   \begin{cases}
     \tau_{\sMkPair}, & \text{when } x = \sMkPair \\
     \rho(x) \both \tau^1_x, & \text{when } x\in \dom{\rho} \\
     \tau^1_x, & \text{otherwise}
   \end{cases} \\
-&\transfer{\sLam{x}{e}}{\rho}\,u &{}={}&
-  \begin{cases}
-    \lTriple{\emptyset}{\emptymap}{\bot}, & \text{when } u = HU \\
-    n*\lTriple{\gamma\setminus_x}{\varphi\setminus_x}{\theta(x) \to \sigma}, & \text{where } u = C^n(u_b),~\lTriple{\gamma}{\varphi}{\sigma} = \theta = \transfer{e}{\rho}\,u_b
-  \end{cases} \\
-&\transfer{\sPair{x_1}{x_2}}{\rho} &{}={}& \transfer{\sApp{\sApp{\sMkPair}{x_1}}{x_2}}{\rho} \\
-&\transfer{\sApp{e}{x}}{\rho}\,u &{}={}& \lTriple{\gamma_e}{\varphi_e}{\sigma} \both \theta_x \\
-   &&&\text{where }
-     \lTriple{\gamma_e}{\varphi_e}{u^* \to \sigma} = \transfer{e}{\rho}\,C^1(u),~
-     \theta_x = \liftstar{\transfer{x}{\rho}}\,u^* \\
-&\transfer{\sCase{e_s}{x}{y}{e_r}}{\rho}\,u &{}={}& \theta_r\setminus_{x,y} \both \theta_s \\
-   &&&\text{where }
-     \theta_r = \transfer{e_r}{\rho}\,u,~
-     \theta_s = \transfer{e_s}{\rho}\,U(\theta_r(x),\theta_r(y)) \\
 &\transfer{\sLet{\bind}{e}}{\rho}\,u &{}={}& \cmblet{\theta}{\maplit{x_1}{\theta_1}} \\
    &&&\text{where }
      \tau_1 = \transfer{e_1}{\rho},~
