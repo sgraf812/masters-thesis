@@ -6,7 +6,7 @@ Despite being massively more simple than Haskells surface syntax, GHC Core still
 
 \section{Object Language}\label{sec:exp}
 
-\begin{figure}
+\begin{figure}[h]
 \begin{alignat*}{2}
 x,y,z,\sMkPair &\in \sVar \\
 e &\in \sExp & {}\Coloneqq{}                    & x \\
@@ -25,9 +25,10 @@ The formalization of the usage analysis operates on a simple untyped lambda calc
 We draw variable names from an abstract set $\sVar$. Of particular note is the identifier $\sMkPair$, which always refers to the pair constructor as a function of two arguments and may not be rebound by a \keyword{let} expression. 
 As is customary in both \textcite{card} and \textcite{callarity}, we assume A-normal form \parencite{anf}, so that arguments to applications can only mention identifiers. Applications to non-trivial arguments like $\sApp{e_1}{e_2}$ must be rewritten as $\sLet{x_2 = e_2}{\sApp{e_1}{x_2}}$, hence issues concerning sharing only surface while handling \keyword{let}-expressions. Any example in this chapter should assumed to be rewritten according to this rule.
 
-\section{Analysis domain}
+\section{Analysis Domain}
 
-\todo{text}
+The analysis, defined by the transfer function in \cref{sec:transfer}, will denote each syntactic expression with a \emph{usage transformer}. 
+This section introduces them from the ground up by defining the relevant concepts.
 
 \subsection{Expression Use and Identifier Usage}
 
@@ -56,8 +57,6 @@ C^\omega(U)          &\equiv U
 \caption{Syntax of expression $\sUse$ and identifier $\sUsage$ with non-syntactic equalities.}
 \label{fig:usg}
 \end{figure}
-
-\todo{lattice ops}
 
 \Cref{fig:usg} depicts the $\sUse$ and the $\sUsage$ lattice. 
 Typical for a sharing analysis, $\sMulti$ captures usage multiplicity, of which the only interesting values in our setting are \emph{at most once} ($1$) or \emph{possibly multiple times} ($\omega$).
@@ -161,8 +160,6 @@ As the remarks in \textcite[Section~2.5]{card} point out, in a non-strict langua
 If an expression like \hsinl{seq f (f 3)} is put under use $U$, this exposes \hsinl{f} to a usage of $\omega*C^1(U)$: \hsinl{f} is evaluated multiple times, yet called only once.
 This is the same argument that \textcite[Appendix~C.2]{warnsbrough} makes with their language of \emph{use} vs. \emph{demand}.
 
-\todo{lattice ops}
-
 \subsection{Usage signatures}
 
 In the last section we developed vocabulary for describing how an expression is used and to which usage a used expression exposes its free variables. Things don't look so well across function boundaries, though:
@@ -177,28 +174,25 @@ If this is put under the typical use $U$, closer look reveals that \hsinl{k} is 
 By beta reduction, this is also the usage that \hsinl{f g} exposes \hsinl{g} to.
 How do we digest that information in a way that it is available at the call site of \hsinl{f}?
 
-We follow the approach from \textcite{card} and ascribe \emph{usage signatures} to function expressions. Their definition can be seen in \cref{fig:sig}.
+We follow the approach from \textcite{card} and ascribe \emph{usage signatures} to function expressions. Their definition is as follows:
+\[
+\sigma \in \sSig \Coloneqq \bot \mid \top \mid u^* \to \sigma
+\]
 
-\begin{figure}
-\begin{alignat*}{2}
-\sigma &\in \sSig &{} \Coloneqq {}& \bot \mid \top \mid u^* \to \sigma
-\end{alignat*}
-\begin{alignat*}{1}
-\omega*U \to \top &\equiv \top \\
-A \to \bot        &\equiv \bot
-\end{alignat*}
-\caption{Syntax of usage signatures and associated non-syntactic equalities.}
-\label{fig:sig}
-\end{figure}
-
-Equipped with the right language, we would give assign the following usage signatures to \hsinl{f} and \hsinl{g}:
+Equipped with the right language, we would assign the following usage signatures to \hsinl{f} and \hsinl{g}:
 
 \begin{haskellcode}
 f :: ß$1*C^1(U) \to \top$ß
 g :: ß$1*U \to \top$ß
 \end{haskellcode}
 
-The non-syntactic identities in \ref{fig:sig} hint at the fact that usage signatures can be expanded to include arbitrary many arguments (although these are usually prohibited through the type system). 
+Usage signatures also come with two non-syntactic identities:
+\begin{alignat*}{1}
+  \omega*U \to \top &\equiv \top \\ 
+  A \to \bot        &\equiv \bot
+\end{alignat*}
+
+These hint at the fact that usage signatures can be expanded to include arbitrary many arguments (although these are usually prohibited through the type system). 
 This is helpful in situations where we only have a usage signature to a call with less arguments available. 
 
 In any case, $\top$ as a usage signature is always a safe conservative approximation. 
@@ -212,24 +206,21 @@ For another notworthy example, the \hsinl{seq} operator would have a usage signa
 
 \subsection{Free-variable graph}\label{sec:graph}
 
-\todo{Move this to a prior chapter introducing Call Arity}
+\todo{Maybe move this to a prior chapter introducing Call Arity}
 
-Central to GHC's \emph{Call Arity} analysis \parencite{callarity} is an undirected, non-transitive, graph datastructure, representing a called-with relationship between free-variables.
-Such a co-call graph would contain an edge between two free-variables, if it is at all possible that the variables could be evaluated \emph{simultaneously}, in the same evaluation of their containing expression, that is.
-Self-edges in co-call graphs correpond to a usage multiplicity of $\omega$, \eg multiple evaluations.
+Central to GHC's \emph{Call Arity} analysis \parencite{callarity} is an undirected, non-transitive, graph datastructure, representing a called-with relationship between free variables.
+Such a co-call graph would contain an edge between two free variables, if it is at all possible that the variables could be evaluated \emph{simultaneously}, in the same evaluation of their containing expression, that is.
+Self-edges in co-call graphs correspond to a usage multiplicity of $\omega$, \eg multiple evaluations.
 
-\Cref{fig:graph} introduces the formal definition for $\sGraph$ and nice syntax for talking about edges within them.
-
-\begin{figure}
-\[
-\gamma \in \sGraph = \mathcal{P}(\sVar \times \sVar)
+We define co-call graphs as a symmetric binary relation on $\sVar$ and syntax for talking about edges within them:
+\[\def\arraystretch{1.5}\arraycolsep=1.4pt
+\begin{array}{rcl}
+  \gamma \in \sGraph &=& \left\{ \gamma \subseteq \sVar \times \sVar \mid (x,y) \in \gamma \Leftrightarrow (y,x) \in \gamma \right\} \\
+  \edge{x_1}{x_2}\in\gamma &\Leftrightarrow& (x_1,x_2) \in \gamma \\
+\end{array}
 \]
-\[
-\edge{x_1}{x_2}\in\gamma \Leftrightarrow (x_1,x_2) \in \gamma
-\]
-\caption{Free-variable $\sGraph$s and syntax for containment of edges.}
-\label{fig:graph}
-\end{figure}
+
+We also use the notation $\gamma \setminus_x$ to mean the graph $\gamma$ purged by any edges to $x$.
 
 The cases where co-call graphs yield better results than the usual usage analyses can be boiled down to the following example:
 
@@ -247,7 +238,7 @@ Knowing that \hsinl{x} is not forced together with \hsinl{y}\footnote{Prior to l
 Consequently, \hsinl{x} is recognized of only being evaluated once. 
 Other usage analyses like that of GHC's Cardinality Analysis \parencite{card} only model self-loops in the underlying co-call structure (\eg usage multiplicity), so they would fail to recognize the absent edge between \hsinl{x} and \hsinl{y} and conservatively assume \hsinl{x} to be called more than once.
 
-\todo{Mention that this only happens for thunks, or refer to where this is written}
+\todo{Mention that this only happens for thunks, or refer to where this is written, \eg \cref{sec:let}}
 
 We enrich the \emph{usage types} of GHC's Cardinality Analysis \parencite{card} with co-call graphs in order to generalise both (c.f. \cref{sec:generalise}).
 
@@ -261,6 +252,7 @@ Thus, we define use environments as partial functions\footnote{Indicated by $\pf
 \varphi \in \sUseEnv = \sVar \pfun \sUse
 \]
 We write $\dom \varphi$ for the domain of the use environment (or any partial function for that matter).
+As with graphs, we also use the notation $\varphi \setminus_x$ to mean $\varphi$ where the domain no longer contains $x$.
 
 To see how we can recover free-variable $\sUsage$ from a combination of co-call graph and use environment, see \cref{sec:utype}.
 
@@ -286,6 +278,8 @@ We define usage types as triples of a co-call graph $\gamma$ (\cref{sec:graph}) 
 \[
 \theta \in \sUType \Coloneqq \lTriple{\gamma}{\varphi}{\sigma}
 \]
+
+Additionally, with the overloaded notation $\theta \setminus_x$ we mean $\theta$, purged by any mentions of $x$ in its co-call graph and use environment.
 
 As hinted at in \cref{sec:useenv}, we can recover free variable usage in the interplay of co-call graph and use environment, denoted by the following lookup syntax:
 
@@ -343,7 +337,114 @@ When denoting expressions, usage transformers map a $\sUse$ the expression is pu
 
 Usage transformers of expressions are monotone maps, in line with the intuition that the stronger the use you put an expression under, the stronger is the usage it exposes arguments and free variables to.
 
-\section{Transfer function}\label{sec:transfer}
+\subsection{Lattice Structure}
+
+Previously, we introduced constructs to which we loosely attributed the properties of a lattice. 
+This section is dedicated to defining join operators, so that the join-semilattice structure we rely upon in \cref{sec:transfer} is made explicit.
+Readers familiar with \textcite{card} may skip this section and \cref{sec:both} after having understood the interplay of co-call graphs and use environment for these operations.
+
+The principal example where joins occur are when combining the analysis results of alternatives of a \keyword{case}-expression. However, since our object language from \cref{sec:exp} only supports very simple \keyword{case}-expressions with the sole purpose of deconstructing pairs, we won't see joins just there. Nevertheless, joins still occur occasionally.
+
+\Cref{fig:lub} shows all definitions of $\llub$ for We start by defining overloaded least upper bound operators $\llub$ for $\sUse$, $\sUsage$ and $\sMulti$
+
+\begin{figure}
+\begin{alignat*}{1}
+  \Aboxed{u_1 \llub u_2 &= u_3} \\
+  U \llub u  &= U \\
+  u \llub U  &= U \\
+  HU \llub u &= u \\
+  u \llub HU &= u \\
+  C^{n_1}(u_1) \llub C^{n_2}(u_2) &= C^{n_1 \llub n_2}(u_1 \llub u_2) \\
+  U(u^*_1, u^*_2) \llub U(u^*_3, u^*_4) &= U(u^*_1 \llub u^*_3, u^*_2 \llub u^*_4) \\
+  &\\
+  \Aboxed{u^*_1 \llub u^*_2 &= u^*_3} \\
+  A \llub u^* &= u^* \\
+  u^* \llub A &= u^* \\ 
+  n_1*u^*_1 \llub n_2*u^*_2 &= (n_1 \llub n_2) * (u^*_1 \llub u^*_2) \\
+  &\\
+  \Aboxed{n_1 \llub n_2 &= n_3} \\
+  \omega \llub n &= \omega \\
+  n \llub \omega &= \omega \\
+  1 \llub 1 &= 1 \\
+  &\\
+  \Aboxed{\sigma_1 \llub \sigma_2 &= \sigma_3} \\
+  \top \llub \sigma &= \top \\
+  \sigma \llub \top &= \top \\
+  \bot \llub \sigma &= \sigma \\
+  \sigma \llub \bot &= \sigma \\
+  (u^*_1 \to \sigma_1) \llub (u^*_2 \to \sigma_2) &= u^*_1 \llub u^*_2 \to \sigma_1 \llub \sigma_2 \\
+  &\\
+  \Aboxed{\gamma_1 \llub \gamma_2 &= \gamma_3} \\
+  \gamma_1 \llub \gamma_2 &= \gamma_1 \cup \gamma_2 \\
+  &\\
+  \Aboxed{\theta_1 \llub \theta_2 &= \theta_3} \\
+  \lTriple{\gamma_1}{\varphi_1}{\sigma_1} \llub \lTriple{\gamma_2}{\varphi_2}{\sigma_2} &= \lTriple{\gamma_1 \llub \gamma_2}{\varphi_1 \llub \varphi_2}{\sigma_1 \llub \sigma_2} \\
+\end{alignat*}
+\label{fig:lub}
+\caption{Least upper bound definitions}
+\end{figure}
+
+\todo{formulate how $A \pfun B$ is a join semilattice with attached bottom when $B$ is a semijoin lattice. Do I have to be more precise than this?}
+
+We ommitted how $\sUseEnv$, $\sTransEnv$ and $\sUTrans$ are join semilattices for brevity. The first two are partial functions ranging over join semilattices, giving rise to a join semilattice with bottom themselves. For usage transformers the join semilattice structure is the pointwise lattice on $\sUType$. 
+
+Of special interest in \cref{sec:transfer} are \emph{monotone} usage transformers, \eg where a stronger incoming $\sUse$ maps to a stronger resulting $\sUType$, and the approximations thereof.
+
+\subsection{Sequential Composition}
+
+Until now, we treated sequential composition rather informally. 
+For cases like \hsinl{x + x} it is simple enough to see that \hsinl{x} is exposed to usage $\omega*U$. 
+That's less obvious for function calls: For example, the usage \hsinl{f} is exposed to in \hsinl{f 0 0 + f 0 0} is $\omega*C^\omega(C^1(U))$.
+
+How can we formalize the process that combines single usages in such a manner?
+The answer to that question bears $\both$ (pronounced 'both') in \cref{fig:both}.
+
+\begin{figure}
+\begin{alignat*}{1}
+  \Aboxed{u_1 \both u_2 &= u_3} \\
+  U \both u  &= U \\
+  u \both U  &= U \\
+  HU \both u &= u \\
+  u \both HU &= u \\
+  C^{n_1}(u_1) \both C^{n_2}(u_2) &= C^{\omega}(u_1 \llub u_2) \\
+  U(u^*_1, u^*_2) \both U(u^*_3, u^*_4) &= U(u^*_1 \both u^*_3, u^*_2 \both u^*_4) \\
+  &\\
+  \Aboxed{u^*_1 \both u^*_2 &= u^*_3} \\
+  A \both u^* &= u^* \\
+  u^* \both A &= u^* \\ 
+  n_1*u^*_1 \both n_2*u^*_2 &= \omega * (u^*_1 \both u^*_2) \\
+  &\\
+  \Aboxed{\varphi_1 \both \varphi_2 &= \varphi_3} \\
+  (\varphi_1 \both \varphi_2)\,x &= \begin{cases}
+    \varphi_1(x) \both \varphi_2(x),&\text{when } x \in \dom{\varphi_1} \cap \dom{\varphi_2} \\
+    \varphi_1(x),&\text{when } x \in \dom{\varphi_1} \\
+    \varphi_2(x),&\text{otherwise}
+  \end{cases} \\
+  &\\
+  \Aboxed{\theta_1 \both \theta_2 &= \theta_3} \\
+  \lTriple{\gamma_1}{\varphi_1}{\sigma_1} \both \lTriple{\gamma_2}{\varphi_2}{\sigma_2} &= \lTriple{\gamma_1 \cup \gamma_2 \cup \dom{\varphi_1} \times \dom{\varphi_2}}{\varphi_1 \both \varphi_2}{\sigma_1} \\
+\end{alignat*}
+\caption{Sequential composition operator $\both$}
+\label{fig:both}
+\end{figure}
+
+Both calls to \hsinl{f} in \hsinl{f 0 0 + f 0 0}, for example, would result in a usage type of $\lTriple{\emptyset}{\maplit{f}{C^1(C^1(U))}}{\top}$. 
+Sequential composition with itself would then yield the expected $\lTriple{\left\{(f,f)\right\}}{\maplit{f}{C^\omega(C^1(U))}}{\top}$.
+
+We also extend the multiplicity notation of usages to usage types to mean exactly this notion of sequential composition with itself:
+\begin{alignat*}{1}
+  1 * \theta &= \theta \\
+  \omega * \theta &= \theta \both \theta
+\end{alignat*}
+
+We don't mention usage transformers in \cref{fig:both}, but assume sequential composition on them to be pointwise.
+
+It is worth pointing out that it makes only sense to talk about sequential composition with respect to free variable usage. 
+
+When combining usage types, this means we have to decide which usage signature to return, as combining them has no justifiable meaning. 
+We arbitrarily bias the left argument in this regard, which is important to keep in mind for the analysis.
+
+\section{Transfer Function}\label{sec:transfer}
 
 Equipped with the proper language to talk about usage, in this section we associate a denoting usage transformer to a syntactic expression of our object language $\sExp$.
 
@@ -364,8 +465,6 @@ Where $\sTransEnv$ is an environment mapping local \keyword{let} binders to thei
 \]
 
 \subsection{Lambda Abstraction}
-
-\todo{$*$, $\setminus_x$}
 
 Let's start by discussing analysis of lambda expressions:
 
@@ -438,7 +537,7 @@ As mentioned in \cref{sec:exp}, $\sMkPair$ is special in that it cannot be rebou
 Although desugaring pairs in such a way is a nice way to keep the definition short, it is worth pointing out that the complexity is just delegated to the usage transformer for the $\sMkPair$ identifier, which will have to provide an appropriate usage signature. 
 We will handle this in the variable case.
 
-\subsection{Case expression}
+\subsection{Case Expression}
 
 The limited \keyword{case}-expressions of our object language serve the sole purpose of desctructuring pairs.
 

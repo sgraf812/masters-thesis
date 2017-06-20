@@ -41,6 +41,8 @@
 % Co-call Graphs
 \newcommand{\edge}[2]{#1\text{---}#2}
 \newcommand{\neighbors}[2]{N_{#1}\parensalways{#2}}
+% I'm not happy with the results of this
+%\newcommand{\singletonloop}[1]{\mathwithin{#1}{\tikz[baseline={([yshift=-.5ex]current bounding box.center)},every loop/.style={looseness=0.1}]{\node {$#1$} edge [loop above] ()}}}
 
 % Auxiliary Operators
 \newcommand{\uscore}[1][\mathunderscore]{\mathwithin{#1}{\mathunderscore}}
