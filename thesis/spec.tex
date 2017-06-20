@@ -390,7 +390,7 @@ We ommitted how $\sUseEnv$, $\sTransEnv$ and $\sUTrans$ are join semilattices fo
 
 Of special interest in \cref{sec:transfer} are \emph{monotone} usage transformers, \eg where a stronger incoming $\sUse$ maps to a stronger resulting $\sUType$, and the approximations thereof.
 
-\subsection{Sequential Composition}
+\subsection{Sequential Composition}\label{sec:both}
 
 Until now, we treated sequential composition rather informally. 
 For cases like \hsinl{x + x} it is simple enough to see that \hsinl{x} is exposed to usage $\omega*U$. 
@@ -628,6 +628,11 @@ In general, for saturated single calls with arity at least as high as the data c
 The last case handles all other incoming uses with a conservative usage signature of $\top$.
 
 \subsection{Non-recursive Let}\label{sec:let}
+
+Resolution of \keyword{let}-bindings often bears interesting design decisions of an analysis.
+
+This analysis is no exception to that rule:
+It combines the ideas from co-call graphs \parencite{callarity} with the general approach of \textcite{card}.
 
 \subsection{Recursive Let}\label{sec:let}
 
