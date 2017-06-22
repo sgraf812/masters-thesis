@@ -1,8 +1,20 @@
 \chapter{Formal Specification}\label{sec:spec}
 
+\tikzset{%
+  every node/.style={
+    inner sep=1pt
+  },
+  every loop/.style={}
+}
+
 As we are heading towards implementation considerations in~\cref{sec:impl}, we provide a formal specification of the usage analysis in this section.
 
-Despite being massively more simple than Haskells surface syntax, GHC Core still captures many details inessential to the analysis. In order to keep the mathematical formulation as concise as possible, we define the transfer function in terms of a simplified object language.
+Despite being massively more simple than Haskells surface syntax, GHC Core still captures many details inessential to the analysis. 
+In order to keep the mathematical formulation as concise as possible, we define the transfer function in terms of a simplified object language in \cref{sec:exp}.
+
+\Cref{sec:dom} introduces the lattice of \emph{usage transformers} the analysis will operate upon. 
+
+Finally, in \cref{sec:transfer} we will see how each syntactic construct of the object language can be denoted by a usage transformer through a \emph{transfer function}.
 
 \section{Object Language}\label{sec:exp}
 
@@ -13,6 +25,7 @@ e &\in \sExp & {}\Coloneqq{}                    & x \\
   &          & \mathwithin{{}\Coloneqq{}}{\mid} & \sPair{x_1}{x_2} \\
   &          & \mathwithin{{}\Coloneqq{}}{\mid} & \sLam{x}{e} \\
   &          & \mathwithin{{}\Coloneqq{}}{\mid} & \sApp{e}{x} \\
+  &          & \mathwithin{{}\Coloneqq{}}{\mid} & \sITE{e_s}{e_t}{e_f} \\
   &          & \mathwithin{{}\Coloneqq{}}{\mid} & \sCase{e_s}{x_1}{x_2}{e_r} \\
   &          & \mathwithin{{}\Coloneqq{}}{\mid} & \sLet{\bind}{e} \\
   &          & \mathwithin{{}\Coloneqq{}}{\mid} & \sLetRec{\binds}{e} \\
@@ -21,11 +34,26 @@ e &\in \sExp & {}\Coloneqq{}                    & x \\
 \label{fig:exp}
 \end{figure}
 
-The formalization of the usage analysis operates on a simple untyped lambda calculus, described in \cref{fig:exp}. The only extensions are pair constructors, complemented with \keyword{case} expressions to destruct them, and possibly recursive \keyword{let} bindings. 
-We draw variable names from an abstract set $\sVar$. Of particular note is the identifier $\sMkPair$, which always refers to the pair constructor as a function of two arguments and may not be rebound by a \keyword{let} expression. 
-As is customary in both \textcite{card} and \textcite{callarity}, we assume A-normal form \parencite{anf}, so that arguments to applications can only mention identifiers. Applications to non-trivial arguments like $\sApp{e_1}{e_2}$ must be rewritten as $\sLet{x_2 = e_2}{\sApp{e_1}{x_2}}$, hence issues concerning sharing only surface while handling \keyword{let}-expressions. Any example in this chapter should assumed to be rewritten according to this rule.
+The formalization of the usage analysis operates on a simple untyped lambda calculus, described in \cref{fig:exp}. 
 
-\section{Analysis Domain}
+We extend it in interesting ways to carve out particular details of our analysis.
+There are (possibly recursive) \keyword{let} bindings to illustrate sharing of values.
+We provide pair constructors, complemented with \keyword{case} expressions to destruct them.
+An \keyword{if}/\keyword{then}/\keyword{else} construct will highlight how the analysis will cope with alternative branches of execution.
+
+We draw variable names from an abstract set $\sVar$. 
+Of particular note is the identifier $\sMkPair$, which always refers to the pair constructor as a function of two arguments and may not be rebound by a \keyword{let} expression. 
+As is customary in both \textcite{card} and \textcite{callarity}, we assume A-normal form \parencite{anf}, so that arguments to applications can only mention identifiers. 
+Applications to non-trivial arguments like $\sApp{e_1}{e_2}$ must be rewritten as $\sLet{x_2 = e_2}{\sApp{e_1}{x_2}}$, hence issues concerning sharing only surface while handling \keyword{let}-expressions.
+
+Note that although there are \keyword{if} expressions, we omitted literal syntax to introduce booleans in order to keep the syntax clean. 
+Anywhere we write the literals \keyword{True} or \keyword{False}, they desugar to their church encoding $\sLam{t}{\sLam{f}{t}}$ and $\sLam{t}{\sLam{f}{f}}$, respectively.
+Our analysis is completely unconcerned by this.
+
+Most code examples will be written in a Haskell-like language anyway, rather than in this object language.
+If there are code samples in object language (distinguishable by the typesetting of binders, \eg \hsinl{x} vs. $x$), they should implicitly assumed to be rewritten according to these rules.
+
+\section{Analysis Domain}\label{sec:dom}
 
 The analysis, defined by the transfer function in \cref{sec:transfer}, will denote each syntactic expression with a \emph{usage transformer}. 
 This section introduces them from the ground up by defining the relevant concepts.
@@ -87,7 +115,7 @@ We would need to \emph{share} the work done by reducing the a function expressio
 Such sharing can be introduced by binding an expression to an identifier. 
 By referring to the bound expression through the identifier, we can call the same expression multiple times, while the reduction of the bound expression to WHNF only happens (at most) once. 
 Generally, there are various ways to bind an expression to an identifier. 
-However, our simple object language was carefully crafted so that sharing is always introduced through \keyword{let}-bindings. 
+However, our simple object language was carefully crafted so that sharing is always introduced through \keyword{let} bindings. 
 Other binding mechanisms like lambdas and \keyword{case} just alias another binding. 
 
 It is inappropriate to model usage of an identifier with $\sUse$, as identifiers can syntactically occur more than once, or even be absent. 
@@ -217,6 +245,7 @@ We define co-call graphs as a symmetric binary relation on $\sVar$ and syntax fo
 \begin{array}{rcl}
   \gamma \in \sGraph &=& \left\{ \gamma \subseteq \sVar \times \sVar \mid (x,y) \in \gamma \Leftrightarrow (y,x) \in \gamma \right\} \\
   \edge{x_1}{x_2}\in\gamma &\Leftrightarrow& (x_1,x_2) \in \gamma \\
+  \neighbors{x}{\gamma} &=& \left\{ y \mid \edge{x}{y} \in \gamma \right\}
 \end{array}
 \]
 
@@ -247,12 +276,13 @@ We enrich the \emph{usage types} of GHC's Cardinality Analysis \parencite{card} 
 Another key ingredient of the analysis domain is an environment in which we track usages of free variables.
 While \textcite{card} encode these directly with a mapping from free variables to usages (\emph{multi-demands} in their language), we track usage multiplicity separately in a co-call graph (\cref{sec:graph}).
 
-Thus, we define use environments as partial functions\footnote{Indicated by $\pfun$, following syntax from the Isabelle proof assistant's library ecosystem} from free variables $\sVar$ to the $\sUse$ their bound expression is put under:
+Thus, we define use environments as partial functions\footnote{Indicated by $\pfun$, following syntax from the Isabelle proof assistant's library ecosystem} with finite domain from free variables $\sVar$ to the $\sUse$ their bound expression is put under:
 \[
 \varphi \in \sUseEnv = \sVar \pfun \sUse
 \]
 We write $\dom \varphi$ for the domain of the use environment (or any partial function for that matter).
 As with graphs, we also use the notation $\varphi \setminus_x$ to mean $\varphi$ where the domain no longer contains $x$.
+Similarly, $\restrict{\varphi}{V}$ is the restriction of $\varphi$ to the domain $V \subseteq \sVar$.
 
 To see how we can recover free-variable $\sUsage$ from a combination of co-call graph and use environment, see \cref{sec:utype}.
 
@@ -271,7 +301,7 @@ If put under use $U$, this evaluates \hsinl{y} twice, \eg exposes it to usage $\
 That is because \hsinl{y} also has a use site within the function expression bound to \hsinl{f}.
 
 So, in addition to a usage signature, a \emph{usage type} should also include what usage a function exposes its free variables to\footnote{We diverge a little from \textcite{card} here, which define usage types as synonymous to a usage signature.}.
-Lucky we, having just developed the appropriate structures to capture this!
+We're quite lucky, just having developed the appropriate structures to capture this!
 
 We define usage types as triples of a co-call graph $\gamma$ (\cref{sec:graph}) and use environment $\varphi$ (\cref{sec:useenv}) for free variables, as well as a usage signature $\sigma$ to capture usage of possible arguments:
 
@@ -309,7 +339,7 @@ The usage type of \hsinl{x} (or, rather its bound expression) exposes \hsinl{y} 
 This suggests that \hsinl{y} will be exposed to usage $\omega*U$ in the whole expression because of the two uses of \hsinl{x}, which is too conservative:
 The binding of \hsinl{x} will share the reduction to WHNF of its right-hand side, exposing \hsinl{y} to a single usage of $1*U$.
 
-We will revisit this when discussing analysis of \keyword{let}-bindings.
+We will revisit this when discussing analysis of \keyword{let} bindings.
 
 \subsection{Usage transformers}\label{sec:utrans}
 
@@ -422,7 +452,7 @@ The answer to that question bears $\both$ (pronounced 'both') in \cref{fig:both}
   \end{cases} \\
   &\\
   \Aboxed{\theta_1 \both \theta_2 &= \theta_3} \\
-  \lTriple{\gamma_1}{\varphi_1}{\sigma_1} \both \lTriple{\gamma_2}{\varphi_2}{\sigma_2} &= \lTriple{\gamma_1 \cup \gamma_2 \cup \dom{\varphi_1} \times \dom{\varphi_2}}{\varphi_1 \both \varphi_2}{\sigma_1} \\
+  \lTriple{\gamma_1}{\varphi_1}{\sigma_1} \both \lTriple{\gamma_2}{\varphi_2}{\sigma_2} &= \lTriple{\gamma_1 \llub \gamma_2 \llub (\dom{\varphi_1} \times \dom{\varphi_2})}{\varphi_1 \both \varphi_2}{\sigma_1} \\
 \end{alignat*}
 \caption{Sequential composition operator $\both$}
 \label{fig:both}
@@ -532,7 +562,7 @@ The seemingly unrelated case of pair literals is handled by the same application
 \]
 
 Representative for any product type, we handle pairs as applications to a special identifier for the pair constructor, $\sMkPair$.
-As mentioned in \cref{sec:exp}, $\sMkPair$ is special in that it cannot be rebound (\eg shadowed) by \keyword{let}-bindings.
+As mentioned in \cref{sec:exp}, $\sMkPair$ is special in that it cannot be rebound (\eg shadowed) by \keyword{let} bindings.
 
 Although desugaring pairs in such a way is a nice way to keep the definition short, it is worth pointing out that the complexity is just delegated to the usage transformer for the $\sMkPair$ identifier, which will have to provide an appropriate usage signature. 
 We will handle this in the variable case.
@@ -544,8 +574,9 @@ The limited \keyword{case}-expressions of our object language serve the sole pur
 We denote it with a usage transformer that makes it evident that we are dealing with a \emph{backwards analysis}:
 
 \begin{alignat*}{2}
-\transfer{\sCase{e_s}{x}{y}{e_r}}{\rho}\,u &{}={}& \theta_r\setminus_{x,y} \both \transfer{e_s}{\rho}\,U(\theta_r(x),\theta_r(y)) \\
-   &\rlap{ where $\theta_r = \transfer{e_r}{\rho}\,u$} &&
+  \transfer{\sCase{e_s}{x}{y}{e_r}}{\rho}\,u &{}={}&& \theta_r\setminus_{x,y} \both \transfer{e_s}{\rho}\,U(\theta_r(x),\theta_r(y)) \\
+   \text{where} \\
+   \theta_r &{}={}&& \transfer{e_r}{\rho}\,u 
 \end{alignat*}
 
 Observe from the flow of information that in order to analyze the scrutinee $e_s$, we first have to analyze the (in general:\ every) case branch $e_r$. 
@@ -558,6 +589,23 @@ Based on that, we can formulate the use on the scrutinee as $U(\theta_r(x), \the
 
 Finally, we sequentially compose the usage type of the case alternative (purged of the case binders) with the usage type of the scrutinee under the calculated use.
 The left argument to $\both$ is $\theta_r$ since the resulting usage signature should be that of the case alternative, rather than that of the scrutinee.
+
+\subsection{\keyword{if} Expressions}
+
+In a more elaborate core language like that of GHC, there would be a single \keyword{case} expression handling algebraic data types with any number of cases.
+
+However, to keep the transfer function simple and concerns orthogonal, it is favorable to separate out \keyword{case} statements with multiple branches into an \keyword{if}/\keyword{then}/\keyword{else} construct.
+
+\begin{alignat*}{2}
+  \transfer{\sITE{e_s}{e_t}{e_f}}{\rho}\,u &{}={}&& (\transfer{e_t}{\rho}\,u \llub \transfer{e_f}{\rho}\,u) \both \transfer{e_s}{\rho} U \\
+\end{alignat*}
+
+This looks like a simpler version of the transfer function on \keyword{case} expressions.
+Yet the usage type of \keyword{then} and \keyword{else} branches are joined together before sequentially combining with the usage type of the scrutinee.
+For a general \keyword{case} expression, we would join analysis results of all branches together in much the same way.
+
+We primarily need \keyword{if} expressions to introduce missing edges in a co-call graph, for the sake of illustrative examples. 
+For instance, in the object language expression $\sITE{b}{t}{f}$ there will be no edge $\edge{t}{f}$ in the co-call graph.
 
 \subsection{Variables}\label{sec:var}
 
@@ -593,9 +641,9 @@ Ignoring the first two cases for a moment, the default case denotes the single u
 
 However for \keyword{let}-bound identifiers, which are handled by the second case, we can do better than that. 
 
-For every \keyword{let}-binder, we have a usage transformer denoting its bound expression available in $\rho$.
+For every \keyword{let} binder, we have a usage transformer denoting its bound expression available in $\rho$.
 The (potential) call to $x$ is approximated by unleashing that usage transformer at the call site.
-This is analogous to the \textsc{LetDn} rule in \textcite{card} and comes with the same trade-off, discussed in \cref{sec:let}.
+This is analogous to the \letdnsc{} rule in \textcite{card} and comes with the same trade-off, discussed in \cref{sec:let}.
 We still have to remember the call to $x$ and do so by sequentially composing with $\tau^1_x$.
 Recall that the sequential composition operator $\both$ is left-biased with respect to the usage signature, so the result will have the signature of $\rho(x)$ instead of $\top$.
 
@@ -629,54 +677,297 @@ The last case handles all other incoming uses with a conservative usage signatur
 
 \subsection{Non-recursive Let}\label{sec:let}
 
-Resolution of \keyword{let}-bindings often bears interesting design decisions of an analysis.
+Resolution of \keyword{let} bindings often bears interesting design decisions of an analysis.
 
 This analysis is no exception to that rule:
 It combines the ideas from co-call graphs \parencite{callarity} with the general approach of \textcite{card}.
 
-\subsection{Recursive Let}\label{sec:let}
+As pointed out in \textcite[section~3.5]{card}, on one hand, we want to unleash calls right at their use site, as if it were inlined, to have a usage signature available:
 
-\begin{alignat*}{1}
-&\zap~{}\colon\sUType \to \sUType \\
-&\zap~\lTriple{\uscore}{\uscore}{\sigma} = \lTriple{\emptyset}{\emptymap}{\sigma}
-\end{alignat*}
+\begin{haskellcode}
+  let b t f = t
+  in b 0 (expensive 0)
+\end{haskellcode}
 
+The usage signature for \hsinl{b} would reveal that the \hsinl{expensive} computation is never needed.
+Thus, we ideally want to analyse \keyword{let} bindings in a \emph{downward} manner, analyzing bound expressions before \keyword{let}-bodies.
+In \textcite{card} this is accounted for by the \letdnsc{} rule.
+
+As they suggest in section~3.6 and we alluded to in \cref{sec:utype} however, this approach loses the shared work of bringing the bound expression to WHNF:
+
+\begin{haskellcode}
+let x = 5*y
+in x + x
+\end{haskellcode}
+
+Unleashing the usage type of \hsinl{x} at each use site would cause the analysis to report \hsinl{y} to be exposed to usage $\omega*U$, where in reality evaluation of the right hand side of \hsinl{x} is shared, hence \hsinl{y} is only exposed to usage $1*U$.
+
+In these cases analysis should proceed in an \emph{upward} manner: 
+Knowing that the \keyword{let}-body exposes \hsinl{x} to usage $\omega*U$, we can analyze the bound expression once in use $U$. 
+Remarkably, this means just one evalution to WHNF, exposing \hsinl{y} to usage $1*U$.
+
+This is embodied in the \letupsc{} rule of \textcite{card}.
+
+At the point where upward analysis unleashes usage types of the bound expression, precise co-call information is no longer available.
+As discussed in \cref{sec:graph}, that is why co-call graphs are valuable. Recall the example from \cref{sec:graph}:
+
+\begin{haskellcode}
+let x = expensive 0
+in let y = 2*x
+   in if b 
+      then x 
+      else y
+\end{haskellcode}
+
+The \letupsc{} rule would assign \hsinl{x} a usage of $\omega*U$. 
+A co-call graph captures the mutual exclusive call relationship between \hsinl{x} and \hsinl{y}, so evaluation of \hsinl{y} does not need to be sequentially composed with the other usage of \hsinl{x}, resulting in \hsinl{x} being exposed to the expected usage $1*U$.
+
+Note that the \letdnsc{} approach would not suffer from this imprecision: 
+If the usage type of \hsinl{x}'s bound expression's evaluation was immediately unleashed at its use sites, usages would be on different branches and analysis results would be fine.
+
+As a result, analysis of thunks (\eg bindings which are not in WHNF) should respect sharing in a similar way to \letupsc{}, while function calls should be treated in \letdnsc{}-style, as if calls where inlined.
+Therefore, we flavor the approach of \textcite{card} with co-call graphs from \textcite{callarity} to mitigate the discussed imprecision of \letupsc{}.
+
+That said, here is the transfer function on non-recursive \keyword{let} bindings:
 \begin{alignat*}{2}
-&\letup{\uscore[\tau]}{\uscore[x]} &\mathmakesamewidth[c]{=}{\colon} &\sUTrans \to \sVar \to \sUTrans \\
-&\letup{\tau}{x} &=&
-  \begin{cases}
-    \tau, & \text{when } \alpha_x = 0 \\
-    \zap\circ\tau, & \text{otherwise}
-  \end{cases}
+  \transfer{\sLet{\bind}{e}}{\rho}\,u &{}={}&& (\cmblet{\theta}{\maplit{x_1}{\theta_1}}) \setminus_{x_i} \\
+  \text{where} \\
+   \tau_1 &{}={}&& \transfer{e_1}{\rho} \\
+   \rho' &{}={}&& \maplit{x_1}{\letdown{\tau_1}{e_1}}\rho \\ 
+   \theta &{}={}&& \transfer{e}{\rho'}\,u \\ 
+   \theta_1 &{}={}&& \liftqm{\letup{\tau_1}{e_1}}{\theta(x_1)}
 \end{alignat*}
 
-\begin{alignat*}{2}
-&\letdown{\uscore[\tau]}{\uscore[x]} &\mathmakesamewidth[c]{=}{\colon} &\sUTrans \to \sVar \to \sUTrans \\
-&\letdown{\tau}{x} &=&
-  \begin{cases}
-    \tau, & \text{when } \alpha_x = 0 \\
-    \tau, & \text{otherwise}
-  \end{cases}
-\end{alignat*}
+Let us start by understanding the auxiliary definitions. 
 
+The usage transformer $\tau_1$ is the denotation of the bound expression $e_1$. 
+We add this new usage transformer to the transformer environment $\rho$ under the identifier $x_1$, yielding a new environment $\rho'$ which we need to analyse $e$.
+
+There is a small catch though: Actually we don't extend $\rho$ with $\tau_1$ directly, but a version modified by the \letdnsc{} operator $\letdown{\uscore}{\uscore} \colon \sUTrans \to \sExp \to \sUTrans$, which we define shortly.
+This makes sense: The way the transformers in $\rho$ are unleashed in the variable case (\cf \cref{sec:var}) corresponds to the \letdnsc{} rule in \textcite{card}.
+
+Equipped with the extended transformer environment $\rho'$, we can proceed to analyse the body $e$. 
+We put its denotation under the incoming use $u$ and observe a usage type $\theta$.
+
+\todo{Mention where an implementation would annotate stuff and that we would update the syntax tree with the final \letupsc{} run over the bound expression}
+
+This usage type has information about which usage $x_1$ was exposed to in the body, expressed as $\theta(x_1)$. 
+Broadly speaking, $\theta_1$ is the result of putting the bound expression, denoted by $\tau_1$, under this usage for a \letupsc{}-like treatment.
+
+For this, $\tau_1$ is again modified, this time by the \letupsc{} operator $\letup{\uscore}{\uscore} \colon \sUTrans \to \sExp \to \sUTrans$.
+
+The resulting usage transformer is then lifted to the domain of $\sUsage$s with $\liftqm{\uscore}{\uscore}$. 
+We already saw a similar operator, $\liftstar{\uscore}{\uscore}$ in \cref{sec:app}. 
+This one lifts with a question mark, reminiscent of `zero or one times'.
 \begin{alignat*}{2}
 &\liftqm{\uscore[\tau]}~A     &{}={}& \lTriple{\emptyset}{\emptymap}{\bot} \\
 &\liftqm{\tau}~(\uscore[n]*u) &{}={}& \tau~u
 \end{alignat*}
 
+Now is a good time to introduce the \letdnsc{} and \letupsc{} operators:
+\begin{alignat*}{1}
+&\zap~{}\colon\sUType \to \sUType \\
+&\zap~\lTriple{\uscore}{\uscore}{\sigma} = \lTriple{\emptyset}{\emptymap}{\sigma}
+\end{alignat*}
 \begin{alignat*}{2}
-&\transfer{x}{\rho} &{}={}&
+  &\letup{\uscore[\tau]}{\uscore[e]} &\mathmakesamewidth[c]{{}=}{\colon} &\sUTrans \to \sExp \to \sUTrans \\
+  &\letup{\tau}{e} &{}={}&
   \begin{cases}
-    \tau_{\sMkPair}, & \text{when } x = \sMkPair \\
-    \rho(x) \both \tau^1_x, & \text{when } x\in \dom{\rho} \\
-    \tau^1_x, & \text{otherwise}
+    \zap\circ\tau, & \text{when } e \text{ is in WHNF} \\
+    \tau, & \text{otherwise}
   \end{cases} \\
-&\transfer{\sLet{\bind}{e}}{\rho}\,u &{}={}& \cmblet{\theta}{\maplit{x_1}{\theta_1}} \\
-   &&&\text{where }
-     \tau_1 = \transfer{e_1}{\rho},~
-     \rho' = \maplit{x_1}{\letdown{\tau_1}{x_1}}\rho,~
-     \theta = \transfer{e}{\rho'},~
-     \theta_1 = \liftqm{\letup{transfer{e_1}{\rho}}{x_1}}{\theta(x_1)} \\
+\\
+  &\letdown{\uscore[\tau]}{\uscore[e]} &\mathmakesamewidth[c]{{}=}{\colon} &\sUTrans \to \sExp \to \sUTrans \\
+  &\letdown{\tau}{e} &{}={}&
+  \begin{cases}
+    \zap, & \text{when } e \text{ is in WHNF} \\
+    \zap\circ\tau, & \text{otherwise}
+  \end{cases}
+\end{alignat*}
+
+The $\zap$ function deletes any information about free variables from a usage type.
+The \letdnsc{} operator $\zap$s free variable information exactly when the \letupsc{} operator does not, so we can be sure that for every \keyword{let}-bound identifier, we either unleash free variable information in \letupsc{} or \letdnsc{} fashion, but never both.
+
+When do we unleash \letupsc{}-style? For those identifiers whose bound expression $e$ is not a value. 
+Conversely, if the bound expression $e$ is already a value, usage information on free variables will be unleashed at use sites, \letdnsc{}-style.
+
+With the ancillary definitions explained, we visit the final expression defining the denoting transformer.
+The expression $\cmblet{\theta}{\maplit{x_1}{\theta_1}}$ sequentially composes $\theta$ with $\theta_1$. 
+However it relates only a subset of the free variables of $\theta$ to those of $\theta_1$ with co-call edges.
+This composition step is critical to the precision of Call Arity \parencite{callarity}, where resolution with co-call graphs is first described.
+Only the neighbors of $x_1$ in $\theta$ can be co-called with everything from $\theta_1$, other co-call edges are ommitted.
+The $\cmblet{\uscore}{\uscore}$ operator can be thought of as a substitution operator for variable graphs.
+In $\cmblet{\theta}{\maplit{x_1}{\theta_1}}$, the operator will substitute every mention of $x_1$ by its associated usage type $\theta_1$ and inherit all relevant co-call edges in the process.
+
+We see in a minute an example that clears things up, but let us first have a look at the definition of this substitution operator:
+\begin{alignat*}{2}
+  \cmblet{\uscore[\theta]}{\mathmakesamewidth[l]{\maplit{x_i}{\lTriple{\gamma_i}{\varphi_i}{\uscore}}\mu}{\uscore[\emptymap]}} &\mathmakesamewidth[c]{~~=}\colon &&\sUType \to (\sVar \pfun \sUType) \to \sUType \\
+  \cmblet{\theta}{\mathmakesamewidth[l]{\maplit{x_i}{\lTriple{\gamma_i}{\varphi_i}{\uscore}}\mu}{\emptymap}} &{}={}&& \theta \\
+  \cmblet{\theta}{\maplit{x_i}{\lTriple{\gamma_i}{\varphi_i}{\uscore}}\mu} &{}={}&& \lTriple{\gamma}{\varphi}{\sigma} \\
+  \text{where} \\ 
+    \lTriple{\gamma'}{\varphi'}{\sigma} &{}={}&& \cmblet{\theta}{\mu} \\ 
+    N &{}={}&& \neighbors{x_i}{\gamma'} \\
+    \gamma &{}={}&& \gamma' \llub \gamma_i \llub (N \times \dom{\varphi_i}) \\
+    \varphi &{}={}&& \varphi' \llub \varphi_i \llub (\restrict{\varphi'}{N}\both \varphi_i)
+\end{alignat*}
+
+\todo{Think about formatting this better}
+
+Apart from recursing over the entire finite map in the second parameter (which makes it a well-defined function), it works very much like the sequential composition operator $\both$ on usage types from \cref{sec:both}.
+
+The only thing in which this substitution operator is more precise is in selecting only a subset $N$ of variables from $\dom{\varphi'}$ which to sequentially compose with $\dom{\varphi_i}$.
+
+As \textcite{callarity} proves, it is safe to choose only the neighbors of $x_i$ in the co-call graph for this:
+All other variables are not actually evaluated together with $x_i$, so we should not need to sequentially compose them.
+
+Mind that the substitution operator will not actually delete $x_i$ from the usage type, so the transfer function must do so after substitution.
+The reason for this is anticipation of recursive binding groups, where the fixed-point iteration relies on binder usage from the last iteration.
+
+The substitution operator is strongly related to \emph{composition graphs} $G_0[G_1,\ldots,G_n]$ as introduced in \textcite[pp.~109]{agt}, where the $n$ vertices in the \emph{outer factor} $G_0$ are substituted by the \emph{inner factors} $G_1,\ldots,G_n$. 
+
+\begin{example}
+  Consider the following non-closed Haskell expression:
+  \begin{haskellcode}
+    let x = 5*a + 3*b
+    in if z
+       then x
+       else y
+  \end{haskellcode}
+
+  We focus on how the \keyword{let} binding will be resolved. For the sake of the example we can assume that all mentioned identifiers have bound non-function expressions which are not in WHNF, thus usage types are unleashed \letupsc{} style.
+
+  For an incoming use of $U$, all particular uses in this example are $U$ and all usage signatures are $\top$.
+  Only the co-call graphs are interesting.
+
+  Analysis of the \keyword{if} expressions yields the usage type $\theta$. 
+  It reveals that \hsinl{x} is exposed to usage $1*U$, so its bound expression is put under use $U$.
+  This results in a usage type $\theta_1$ for the bound expression.
+  The associated co-call graphs $\gamma$ and $\gamma_1$ are the following:
+  \begin{align*}
+    \gamma &= 
+    \begin{tikzpicture}[baseline={(0.base)}]
+      \node (0) {$z$};
+      \node at (1,0.3) (1) {$x$};
+      \node at (1,-0.3) (2) {$y$};
+      \draw (0) -- (1);
+      \draw (0) -- (2);
+    \end{tikzpicture}
+    &
+    \gamma_1 =&
+    \begin{tikzpicture}[baseline={(0.base)}]
+      \node (0) {$a$};
+      \node (1) at (1,0) {$b$};
+      \draw (0) -- (1);
+    \end{tikzpicture}
+  \end{align*}
+
+  The substitution step will substitute $\gamma_1$ into $x$ and immediately flatten the resulting hypergraph:
+  \begin{align*}
+    \begin{tikzpicture}[baseline={(0.base)}]
+      \node (0) {$z$};
+      \node at (1,0.3) (1) {$x$};
+      \node at (1,-0.3) (2) {$y$};
+      \node at (-0.3, 1) (3) {$a$};
+      \node at (0.3, 1) (4) {$b$};
+      \draw (3) -- (4);
+      \draw (0) -- (1);
+      \draw (0) -- (3);
+      \draw (0) -- (4);
+      \draw (0) -- (2);
+    \end{tikzpicture}
+  \end{align*}
+
+  Finally, the transfer function will delete all mentions of $x$ from the usage type, resulting in the final co-call graph
+  \begin{align*}
+    \begin{tikzpicture}[baseline={(0.base)}]
+      \node (0) {$z$};
+      \node at (1,-0.3) (2) {$y$};
+      \node at (0.3, 1) (3) {$a$};
+      \node at (1, 0.3) (4) {$b$};
+      \draw (3) -- (4);
+      \draw (0) -- (3);
+      \draw (0) -- (4);
+      \draw (0) -- (2);
+    \end{tikzpicture}
+  \end{align*}
+
+  Note that \hsinl{a} and \hsinl{b} are not co-called with \hsinl{y}, as expected.
+\end{example}
+
+\begin{example}
+  For another example that focuses on the \letdnsc{} rule instead of the \letupsc{} rule, consider the following slightly modified variant from a moment ago:
+  \begin{haskellcode}
+    let f x = 5*a + 3*b
+    in if z
+       then f y
+       else y
+  \end{haskellcode}
+
+  This is the nearly same example as before, only the work of the bound expression is now hidden behind a lambda. 
+  So the expression is in WHNF and \hsinl{f} will be unleashed according to \letdnsc{}.
+
+  When analysing that \keyword{let} binding, we extend the transformer environment with the usage transformer $\tau_1$, denoting the expression bound to \hsinl{f}, to yield $\rho'$.
+  
+  Analysis proceeds with the \keyword{let} body. The call site of \hsinl{f} entails a lookup in $\rho'$ and will unleash the usage type (\cf the variable case in \cref{sec:var})
+  \begin{align*}
+    \rho'(f)\,C^1(U) \both \tau^1_f\,C^1(U) &=
+    \lTriple{
+      \begin{tikzpicture}[baseline={(0.base)}]
+        \node (0) {$f$};
+        \node at (1,0.3) (1) {$a$};
+        \node at (1,-0.3) (2) {$b$};
+        \draw (0) -- (1);
+        \draw (0) -- (2);
+        \draw (1) -- (2);
+      \end{tikzpicture}
+    }{\left[f \mapsto C^1(U), a \mapsto U, b \mapsto U\right]}{A \to \top}
+  \end{align*}
+  
+  The usage signature conveys that \hsinl{f} does not use its argument, so the call does not use \hsinl{y} at all.
+
+  That means the whole \hsinl{if} expression will have the co-call graph
+  \begin{align*}
+      \begin{tikzpicture}[baseline={(0.base)}]
+        \node (0) {$z$};
+        \node at (1,0.3) (1) {$f$};
+        \node at (1,-0.3) (2) {$y$};
+        \node at (-0.3, 1) (3) {$a$};
+        \node at (0.3, 1) (4) {$b$};
+        \draw (3) -- (4);
+        \draw (0) -- (1);
+        \draw (0) -- (3);
+        \draw (0) -- (4);
+        \draw (0) -- (2);
+        \draw (1) -- (3);
+        \draw (1) -- (4);
+      \end{tikzpicture}
+  \end{align*}
+
+  This differs from the prior example's graph only in that there are co-call edges between \hsinl{f} and the free variables of its bound expression.
+  These are irrelevant, however, as for non-recursive \keyword{let} these can never introduce loops on \hsinl{f}. 
+  After all, how would \hsinl{f}'s bound expression call itself? 
+
+  The final co-call graph after deleting \hsinl{f} is exactly the same as in the preceding example:
+  \begin{align*}
+    \begin{tikzpicture}[baseline={(0.base)}]
+      \node (0) {$z$};
+      \node at (1,-0.3) (2) {$y$};
+      \node at (0.3, 1) (3) {$a$};
+      \node at (1, 0.3) (4) {$b$};
+      \draw (3) -- (4);
+      \draw (0) -- (3);
+      \draw (0) -- (4);
+      \draw (0) -- (2);
+    \end{tikzpicture}
+  \end{align*}
+
+  This exemplifies that in the case of functions, \letdnsc{} is as precise as \letupsc{} with co-call graphs.
+\end{example}
+
+
+\subsection{Recursive Let}\label{sec:letrec}
+
+\begin{alignat*}{2}
 &\transfer{\sLet{\binds}{e}}{\rho}\,u &{}={}& \cmblet{\theta}{\maplit[\overline]{x_i}{\theta_i}} \\
    &&&\text{where }
      \overline{\tau_i = \transfer{e_i}{\rho'}},~
