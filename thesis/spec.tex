@@ -577,7 +577,7 @@ As mentioned in \cref{sec:exp}, $\sMkPair$ is special in that it cannot be rebou
 Although desugaring pairs in such a way is a nice way to keep the definition short, it is worth pointing out that the complexity is just delegated to the usage transformer for the $\sMkPair$ identifier, which will have to provide an appropriate usage signature. 
 We will handle this in the variable case.
 
-\subsection{Case Expression}
+\subsection{\keyword{case} Expression}
 
 The limited \keyword{case}-expressions of our object language serve the sole purpose of desctructuring pairs.
 
@@ -1079,4 +1079,4 @@ In practice, and that's also what the implementation of \textcite{card} within G
 
 Finally, a termination proof for the analysis will rely on the monotonicity of denoting usage transformers, even the approximated ones.
 Hence, showing that the transfer function is only denoting monotone usage transformers adds to the pile of proof work.
-The monotonicity assumption also makes for interesting hacks to the implementation in absence of a proper data structure for monotone maps (\cf \cref{todo}).
+The monotonicity assumption also makes for interesting hacks to the implementation in absence of a proper data structure for monotone maps (\cf \tod{ref}).
