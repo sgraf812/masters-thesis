@@ -42,7 +42,7 @@
 
 % Co-call Graphs
 \newcommand{\edge}[2]{#1\text{---}#2}
-\newcommand{\neighbors}[2]{N_{#1}({#2})}
+\newcommand{\neighbors}[2]{N_{#1} ({#2})}
 % I'm not happy with the results of this
 %\newcommand{\singletonloop}[1]{\mathwithin{#1}{\tikz[baseline={([yshift=-.5ex]current bounding box.center)},every loop/.style={looseness=0.1}]{\node {$#1$} edge [loop above] ()}}}
 
@@ -56,6 +56,8 @@
 \newcommand{\liftstar}[1]{[#1]^*}
 \newcommand{\liftqm}[1]{[#1]^\sfop{?}}
 \newcommand{\cmblet}[2]{#1\ltimes#2}
+\DeclareMathOperator{\lfp}{lfp}
+\newcommand{\fix}{\keyword{fix}}
 \newcommand*{\cf}{cf.\@\xspace}
 \newcommand*{\eg}{e.g.\@\xspace}
 \newcommand*{\ie}{i.e.\@\xspace}

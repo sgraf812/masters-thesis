@@ -367,13 +367,17 @@ When denoting expressions, usage transformers map a $\sUse$ the expression is pu
 
 Usage transformers of expressions are monotone maps, in line with the intuition that the stronger the use you put an expression under, the stronger is the usage it exposes arguments and free variables to.
 
-\subsection{Lattice Structure}
+\subsection{Lattice Structure}\label{sec:lattice}
 
 Previously, we introduced constructs to which we loosely attributed the properties of a lattice. 
 This section is dedicated to defining join operators, so that the join-semilattice structure we rely upon in \cref{sec:transfer} is made explicit.
+Also, all structures are equipped with a least element referred to by the overloaded notation $\bot$.
 Readers familiar with \textcite{card} may skip this section and \cref{sec:both} after having understood the interplay of co-call graphs and use environment for these operations.
 
-The principal example where joins occur are when combining the analysis results of alternatives of a \keyword{case}-expression. However, since our object language from \cref{sec:exp} only supports very simple \keyword{case}-expressions with the sole purpose of deconstructing pairs, we won't see joins just there. Nevertheless, joins still occur occasionally.
+The principal example where joins occur in real languages are when combining the analysis results of alternatives of a \keyword{case}-expression. 
+However, since our object language from \cref{sec:exp} only supports very simple \keyword{case} expressions with the sole purpose of deconstructing pairs, we won't see joins just there. 
+Instead, we introduced \keyword{if} expressions for exactly that purpose: 
+Analysis of \keyword{if}s needs to join the results of the \keyword{then} and \keyword{else} branches, so that examples can introduce joins for interesting (\eg non-complete) co-call graphs.
 
 \Cref{fig:lub} shows all definitions of $\llub$ for We start by defining overloaded least upper bound operators $\llub$ for $\sUse$, $\sUsage$ and $\sMulti$
 
@@ -414,9 +418,15 @@ The principal example where joins occur are when combining the analysis results 
 \caption{Least upper bound definitions}
 \end{figure}
 
-\todo{formulate how $A \pfun B$ is a join semilattice with attached bottom when $B$ is a semijoin lattice. Do I have to be more precise than this?}
+Definitions for bottom elements are not explicitly given, but should be obvious given the definition of $\llub$.
 
-We ommitted how $\sUseEnv$, $\sTransEnv$ and $\sUTrans$ are join semilattices for brevity. The first two are partial functions ranging over join semilattices, giving rise to a join semilattice with bottom themselves. For usage transformers the join semilattice structure is the pointwise lattice on $\sUType$. 
+For $\sUType$ in particular, it is $\bot = \lTriple{\bot}{\bot}{\bot} = \lTriple{\emptyset}{\emptymap}{\bot}$.
+
+We ommitted how $\sUseEnv$, $\sTransEnv$ and $\sUTrans$ are join-semilattices for brevity. 
+The first two are partial functions ranging over join-semilattices, giving rise to a join-semilattice with $\bot = \emptymap$ themselves. 
+For usage transformers, the join-semilattice structure is the pointwise lattice on $\sUType$, with the bottom element $\uscore \mapsto \bot$. 
+
+The notation $a \lleq b$ is short for $a \llub b = b$ and induces the typical partial order on the join-semilattices.
 
 Of special interest in \cref{sec:transfer} are \emph{monotone} usage transformers, \eg where a stronger incoming $\sUse$ maps to a stronger resulting $\sUType$, and the approximations thereof.
 
@@ -730,7 +740,7 @@ Therefore, we flavor the approach of \textcite{card} with co-call graphs from \t
 
 That said, here is the transfer function on non-recursive \keyword{let} bindings:
 \begin{alignat*}{2}
-  \transfer{\sLet{\bind}{e}}{\rho}\,u &{}={}&& (\cmblet{\theta}{\maplit{x_1}{\theta_1}}) \setminus_{x_i} \\
+  \transfer{\sLet{\bind}{e}}{\rho}\,u &{}={}&& (\cmblet{\theta}{\maplit{x_1}{\theta_1}}) \setminus_{x_1} \\
   \text{where} \\
    \tau_1 &{}={}&& \transfer{e_1}{\rho} \\
    \rho' &{}={}&& \maplit{x_1}{\letdown{\tau_1}{e_1}}\rho \\ 
@@ -964,14 +974,109 @@ The substitution operator is strongly related to \emph{composition graphs} $G_0[
   This exemplifies that in the case of functions, \letdnsc{} is as precise as \letupsc{} with co-call graphs.
 \end{example}
 
-
 \subsection{Recursive Let}\label{sec:letrec}
 
+\Cref{sec:let} was dedicated to explaining analysis of \keyword{let} bindings in great detail. 
+In particular, the distinction between functions and thunks and how substitution in co-call graphs work are delicate technicalities.
+
+This section discusses how to extend the analysis to recursive \keyword{let} bindings.
+
+As usual, this will involve fixed-point iteration over the analysis lattice of usage transformers.
+However, showing that a fixed-point exists is not trivial, as the domain formed by usage transformers has infinite height.
+
+Repressing all thoughts on the termination problem ahead, we postulate existence of a fixed-point combinator \fix, satisfying the following typical equation for all $f$ we possibly pass to it:
+\[
+  \fix f = f (\fix f)
+\]
+
+Where exactly do we need to apply fixed-point iteration? 
+
+For one, in order to recurse, the bound expression must have access to its own usage transformer $\tau_1$ through the transformer environment $\rho'$, so some mutual entanglement caused by \letdnsc{}-style analysis can be expected. 
+
+Moreover, the usage type $\theta$ from \cref{sec:let}, which is used to look up usage of the bound identifiers within their scope for \letupsc{}-style resolution, only captures usage from the body. 
+That was fine as long as only the body represented the entire scope for the newly bound identifiers, but now that bound expressions may refer to their own binding group. 
+That's why the substitution operator does not delete substituted identifiers from usage types:
+The iterated usage type will represent the usage in the scope of the binding group.
+
+Without further ado, the transfer function on recursive bindings is defined as
 \begin{alignat*}{2}
-&\transfer{\sLet{\binds}{e}}{\rho}\,u &{}={}& \cmblet{\theta}{\maplit[\overline]{x_i}{\theta_i}} \\
-   &&&\text{where }
-     \overline{\tau_i = \transfer{e_i}{\rho'}},~
-     \rho' = \maplit[\overline]{x_i}{\letdown{\tau_i}{x_i}}\rho,~
-     \theta = \transfer{e}{\rho}\,u \llub \transfer{\sLet{\binds}{e}}{\rho}\,u,~
-     \overline{\theta_i = \liftqm{\letup{\transfer{e_i}{\rho'}}{x_i}}\,(\theta(x_i) \both \theta(x_i))}
+  \transfer{\sLet{\binds}{e}}{\rho}\,u &{}={}&& (\fix\,up) \setminus_{\overline{x_i}} \\
+  \text{where} \\
+   up\,\theta &{}={}&& \cmblet{(\transfer{e}{\rho'}\,u \llub \theta)}{\maplit[\overline]{x_i}{\theta_i}} \\
+   \overline{\theta_i} &{}={}&& \overline{\liftqm{\letup{\transfer{e_i}{\rho'}}{e_i}}{(\theta(x_i) \both \theta(x_i))}} \\
+   \rho' &{}={}&& \fix\,down \\
+   down\,\rho' &{}={}&& \maplit[\overline]{x_i}{\letdown{\transfer{e_i}{\rho \llub \rho'}}{e_i}}\rho \\ 
 \end{alignat*}
+
+Where the dependency chain of auxiliary definitions flows upwards, \eg $down$ can be defined without looking at any other auxiliary definition.
+
+Let's comprehend it in exactly that order.
+
+We perform the fixed-point iteration that yields the extended transformer environment $\rho'$ first, by iterating with $down$.
+Note that compared to \cref{sec:let}, in order to make recursion explicit and avoid mutual recursion, we had to abandon $\tau_1$ ($\tau_i$, hypothetically), the transformer denoting the bound expression.
+Instead, the definition of $\tau_1$ was inlined at its two use sites.
+Also, since fixed-point iteration potentially begins with $\bot$, we have to make sure to pass the least upper bound $\rho \llub \rho'$ to the bound expression's transfer function.
+
+Given a stable transformer environment $\rho'$, we can compute the outer fixed-point of the $up$ function.
+
+Actual \letupsc{}-style substitution is done in $up$.
+The substitution step changed only in that we substitute into the usage type of the last iteration $\theta$, joined with the usage type of the body for the first iteration.
+
+As mentioned above, $\theta$ represents the usage type of the entire scope of the binding group.
+Thus, the bound expressions can be analysed according to the usage $\theta$ reports.
+Looking at the definitions for $\theta_i$, identifier usage of $x_i$ within its scope is sequentially composed ($\both$) with itself immediately.
+
+That is a conservative approximation, but a tractable one:
+As \textcite[102--104]{callarity} points out, one-shot recursive bindings are rare enough to neglect this case and co-call information for the recursive thunk case is flawed anyway.
+
+When iteration of $up$ finally reached a fixed-point, all that remains is to strip off the identifiers from the resulting usage type.
+
+\subsubsection{Existence of the Fixed-point and Termination}
+
+As noted at the begin of \cref{sec:letrec}, proofs for the existence of fixed-points in the two occurences of \fix{} are non-trivial. 
+At the same time, a rigorous proof is out of scope for this thesis (with respect to both extent and time), so this section will just provide a short sketch.
+
+As the Kleene fixed-point theorem states, iterating a Scott-continuous function $f \colon D \to D$ over a directed-complete partial order $(D, \lleq)$ starting at a bottom element $\bot$ always converges towards the least fixed-point:
+\[
+  \mu\,f = \bigsqcup \{f^n\,\bot \mid n \in \mathbb{N} \}
+\]
+
+By identifying \fix{} with $\mu$, the we recover well-definedness:
+As noted in \cref{sec:lattice}, usage transformers form a join-semilattice with least element $\uscore \mapsto \lTriple{\emptyset}{\emptymap}{\bot}$.
+For usage transformers to form a directed-complete partial order, it is enough to show completeness of the semilattice, which transitively reduces to completeness of the $\sUType$ join-semilattice and all other mentioned substructures.
+Proving completeness should be trivial in all cases.
+
+Well-definedness does not guarantee construction of the least fixed-point in finite time, though.
+
+The usual argument is to prove finite height of the lattice in question.
+The following strictly ascending chain proves arbitrary height $n$ for the join-semilattice of $\sUse$:
+\[
+  (C^1(\uscore))^n\,U \lless (C^1(\uscore))^{n-1}\,U \lless \ldots \lless C^1(U) \lless U
+\]
+
+However, proving the weaker ascending chain condition, also sufficient for termination, is still possible for that case.
+
+Enter product usages. The following strictly ascending chain of arbitrary length $n$ in $\sUsage$ shatters all hopes:
+\[
+  A \lless 1*U(1*U, A) \lless 1*U(1*U, 1*(1*U, A)) \lless \ldots \lless (1*U(1*U,\uscore))^n\,A
+\]
+
+\todo{Move this to the implementation chapter and reference it}
+
+This actually happens for usage signatures of coinductive definitions, which are permitted in a lazy functional language like Haskell and can also be emulated in strict languages through explicitly delayed computations. 
+Consider this snippet on lazy streams:
+
+\begin{haskellcode}
+  data IntStream = MkStream Int IntStream
+
+  triple :: IntStream -> IntStream
+  triple (MkStream x xs) = MkStream (3 * x) (triple xs)
+\end{haskellcode}
+
+Approximation of the usage transformer of \hsinl{triple} will begin with $\bot$. If put under use $U$, the usage on the first argument will ascend to $1*U(1*U, A)$, then to $1*U(1*U, 1*U(1*U, A))$ and so on.
+
+In practice, and that's also what the implementation of \textcite{card} within GHC does, we have to artificially bound the depth of product uses for the analysis to terminate.
+
+Finally, a termination proof for the analysis will rely on the monotonicity of denoting usage transformers, even the approximated ones.
+Hence, showing that the transfer function is only denoting monotone usage transformers adds to the pile of proof work.
+The monotonicity assumption also makes for interesting hacks to the implementation in absence of a proper data structure for monotone maps (\cf \cref{todo}).
