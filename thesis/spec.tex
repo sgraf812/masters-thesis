@@ -51,7 +51,7 @@ Anywhere we write the literals \keyword{True} or \keyword{False}, they desugar t
 Our analysis is completely unconcerned by this.
 
 Most code examples will be written in a Haskell-like language anyway, rather than in this object language.
-If there are code samples in object language (distinguishable by the typesetting of binders, \eg \hsinl{x} vs. $x$), they should implicitly assumed to be rewritten according to these rules.
+If there are code samples in object language (distinguishable by the typesetting of binders, \eg \hsinl{x} \vs $x$), they should implicitly assumed to be rewritten according to these rules.
 
 \section{Analysis Domain}\label{sec:dom}
 
@@ -152,7 +152,7 @@ If we put the expression under some use $U$, we find out the following facts by 
 \end{example}
 
 We just saw a single call usage $1*C^1(U)$ on a free variable \hsinl{f}. 
-The following expressions hints at the fact that, in general, right-hand sides of bindings can be put under call uses $C^n_1(C^n_2(\ldots C^n_k(U)\ldots))$ for any $n_i\in\sMulti$.
+The following expressions hints at the fact that, in general, right-hand sides of bindings can be put under call uses $C^{n_1}(C^{n_2}(\ldots C^{n_k}(U)\ldots))$ for any $n_i\in\sMulti$.
 This is through exploiting currying and sharing through bindings.
 
 \begin{example} 
@@ -186,7 +186,7 @@ In these cases of \emph{single-entry} thunks, GHC exploits that call-by-need coi
 
 As the remarks in \textcite[Section~2.5]{card} point out, in a non-strict language with the \hsinl{seq} primitive, it is even possible for functions to be \emph{evaluated} multiple times, yet \emph{called} only once.
 If an expression like \hsinl{seq f (f 3)} is put under use $U$, this exposes \hsinl{f} to a usage of $\omega*C^1(U)$: \hsinl{f} is evaluated multiple times, yet called only once.
-This is the same argument that \textcite[Appendix~C.2]{warnsbrough} makes with their language of \emph{use} vs. \emph{demand}.
+This is the same argument that \textcite[Appendix~C.2]{warnsbrough} makes with their language of \emph{use} \vs \emph{demand}.
 
 \subsection{Usage signatures}
 
@@ -594,7 +594,7 @@ Case statements are Haskell's basic construct to specify evaluation order:
 A typical operational semantics would first analyze the scrutinee, then choose the appropriate case branch.
 
 The denoting usage transformer will apply the incoming use to the case branch.
-In the resulting usage type $\theta_r$ we can look up the usage the product component binders $x$ and $y$ are exposed to.
+In the resulting usage type $\theta_r$ we can look up the usage the pair component binders $x$ and $y$ are exposed to.
 Based on that, we can formulate the use on the scrutinee as $U(\theta_r(x), \theta_r(y))$.
 
 Finally, we sequentially compose the usage type of the case alternative (purged of the case binders) with the usage type of the scrutinee under the calculated use.
@@ -984,7 +984,7 @@ This section discusses how to extend the analysis to recursive \keyword{let} bin
 As usual, this will involve fixed-point iteration over the analysis lattice of usage transformers.
 However, showing that a fixed-point exists is not trivial, as the domain formed by usage transformers has infinite height.
 
-Repressing all thoughts on the termination problem ahead, we postulate existence of a fixed-point combinator \fix, satisfying the following typical equation for all $f$ we possibly pass to it:
+Repressing all thoughts on the termination problem ahead, we postulate existence of a fixed-point combinator $\fix$, satisfying the following typical equation for all $f$ we possibly pass to it:
 \[
   \fix f = f (\fix f)
 \]
@@ -1000,26 +1000,26 @@ The iterated usage type will represent the usage in the scope of the binding gro
 
 Without further ado, the transfer function on recursive bindings is defined as
 \begin{alignat*}{2}
-  \transfer{\sLet{\binds}{e}}{\rho}\,u &{}={}&& (\fix\,up) \setminus_{\overline{x_i}} \\
+  \transfer{\sLet{\binds}{e}}{\rho}\,u &{}={}&& (\fix\,\up) \setminus_{\overline{x_i}} \\
   \text{where} \\
-   up\,\theta &{}={}&& \cmblet{(\transfer{e}{\rho'}\,u \llub \theta)}{\maplit[\overline]{x_i}{\theta_i}} \\
+   \up\,\theta &{}={}&& \cmblet{(\transfer{e}{\rho'}\,u \llub \theta)}{\maplit[\overline]{x_i}{\theta_i}} \\
    \overline{\theta_i} &{}={}&& \overline{\liftqm{\letup{\transfer{e_i}{\rho'}}{e_i}}{(\theta(x_i) \both \theta(x_i))}} \\
-   \rho' &{}={}&& \fix\,down \\
-   down\,\rho' &{}={}&& \maplit[\overline]{x_i}{\letdown{\transfer{e_i}{\rho \llub \rho'}}{e_i}}\rho \\ 
+   \rho' &{}={}&& \fix\,\down \\
+   \down\,\rho' &{}={}&& \maplit[\overline]{x_i}{\letdown{\transfer{e_i}{\rho \llub \rho'}}{e_i}}\rho \\ 
 \end{alignat*}
 
-Where the dependency chain of auxiliary definitions flows upwards, \eg $down$ can be defined without looking at any other auxiliary definition.
+Where the dependency chain of auxiliary definitions flows upwards, \eg $\down$ can be defined without looking at any other auxiliary definition.
 
 Let's comprehend it in exactly that order.
 
-We perform the fixed-point iteration that yields the extended transformer environment $\rho'$ first, by iterating with $down$.
+We perform the fixed-point iteration that yields the extended transformer environment $\rho'$ first, by iterating with $\down$.
 Note that compared to \cref{sec:let}, in order to make recursion explicit and avoid mutual recursion, we had to abandon $\tau_1$ ($\tau_i$, hypothetically), the transformer denoting the bound expression.
 Instead, the definition of $\tau_1$ was inlined at its two use sites.
 Also, since fixed-point iteration potentially begins with $\bot$, we have to make sure to pass the least upper bound $\rho \llub \rho'$ to the bound expression's transfer function.
 
-Given a stable transformer environment $\rho'$, we can compute the outer fixed-point of the $up$ function.
+Given a stable transformer environment $\rho'$, we can compute the outer fixed-point of the $\up$ function.
 
-Actual \letupsc{}-style substitution is done in $up$.
+Actual \letupsc{}-style substitution is done in $\up$.
 The substitution step changed only in that we substitute into the usage type of the last iteration $\theta$, joined with the usage type of the body for the first iteration.
 
 As mentioned above, $\theta$ represents the usage type of the entire scope of the binding group.
@@ -1029,22 +1029,35 @@ Looking at the definitions for $\theta_i$, identifier usage of $x_i$ within its 
 That is a conservative approximation, but a tractable one:
 As \textcite[102--104]{callarity} points out, one-shot recursive bindings are rare enough to neglect this case and co-call information for the recursive thunk case is flawed anyway.
 
-When iteration of $up$ finally reached a fixed-point, all that remains is to strip off the identifiers from the resulting usage type.
+When iteration of $\up$ finally reached a fixed-point, all that remains is to strip off the identifiers from the resulting usage type.
 
 \subsubsection{Existence of the Fixed-point and Termination}
 
-As noted at the begin of \cref{sec:letrec}, proofs for the existence of fixed-points in the two occurences of \fix{} are non-trivial. 
-At the same time, a rigorous proof is out of scope for this thesis (with respect to both extent and time), so this section will just provide a short sketch.
+As noted at the begin of \cref{sec:letrec}, proofs for the existence of fixed-points in the two occurences of $\fix$ are non-trivial. 
+At the same time, a rigorous proof is out of scope for this thesis (with respect to both extent and time), so this section will just provide a short sketch.\medskip
 
 As the Kleene fixed-point theorem states, iterating a Scott-continuous function $f \colon D \to D$ over a directed-complete partial order $(D, \lleq)$ starting at a bottom element $\bot$ always converges towards the least fixed-point:
 \[
-  \mu\,f = \bigsqcup \{f^n\,\bot \mid n \in \mathbb{N} \}
+  \mu\,f = \lbiglub \{f^n\,\bot \mid n \in \mathbb{N} \}
 \]
 
-By identifying \fix{} with $\mu$, the we recover well-definedness:
+By giving usage transformers the structure of a directed-complete partial order and proving the iterated functions $\up$ and $\down$ Scott-continuous, we can identify $\fix$ with $\mu$ and recover well-definedness.\smallskip
+
 As noted in \cref{sec:lattice}, usage transformers form a join-semilattice with least element $\uscore \mapsto \lTriple{\emptyset}{\emptymap}{\bot}$.
 For usage transformers to form a directed-complete partial order, it is enough to show completeness of the semilattice, which transitively reduces to completeness of the $\sUType$ join-semilattice and all other mentioned substructures.
 Proving completeness should be trivial in all cases.
+
+What remains to be proven is the Scott-continuity of the iterated functions $\up$ and $\down$.
+Scott-continuity implies monotonicity, but it is not obvious how $\up$ and $\down$ are even monotone.
+
+Because the $\up$ function looks up identifier usage from the usage type, monotonicity requires that a stronger usage leads to a stronger usage type unleashed by the bound expression.
+
+In other words: Monotonicity of $\up$ implies that the transfer function ranges only over \emph{monotone} usage transformers, adding to the pile of proof work to do. 
+In fact, termination bugs regarding monotonicity actually occured while realising the implementation due to the chosen data structures (\cf \tod{impl}).
+
+The proof for Scott-continuity of $\up$ would follow a similar argument, so we also need to prove continuity of all usage transformers in the image of the transfer function.
+
+So, proving well-definedness of the transfer function entails quite some proof work.\medskip
 
 Well-definedness does not guarantee construction of the least fixed-point in finite time, though.
 
@@ -1056,7 +1069,7 @@ The following strictly ascending chain proves arbitrary height $n$ for the join-
 
 However, proving the weaker ascending chain condition, also sufficient for termination, is still possible for that case.
 
-Enter product usages. The following strictly ascending chain of arbitrary length $n$ in $\sUsage$ shatters all hopes:
+Enter pair uses. The following strictly ascending chain of arbitrary length $n$ in $\sUsage$ shatters all hopes:
 \[
   A \lless 1*U(1*U, A) \lless 1*U(1*U, 1*(1*U, A)) \lless \ldots \lless (1*U(1*U,\uscore))^n\,A
 \]
@@ -1075,8 +1088,70 @@ Consider this snippet on lazy streams:
 
 Approximation of the usage transformer of \hsinl{triple} will begin with $\bot$. If put under use $U$, the usage on the first argument will ascend to $1*U(1*U, A)$, then to $1*U(1*U, 1*U(1*U, A))$ and so on.
 
-In practice, and that's also what the implementation of \textcite{card} within GHC does, we have to artificially bound the depth of product uses for the analysis to terminate.
+In practice, and that's also what the implementation of \textcite{card} within GHC does, we have to artificially bound the depth of pair uses for the analysis to terminate.
 
-Finally, a termination proof for the analysis will rely on the monotonicity of denoting usage transformers, even the approximated ones.
-Hence, showing that the transfer function is only denoting monotone usage transformers adds to the pile of proof work.
-The monotonicity assumption also makes for interesting hacks to the implementation in absence of a proper data structure for monotone maps (\cf \tod{ref}).
+\section{Relationship to Call Arity and Demand Analysis}
+
+As we jumped through quite some hoops in this chapter to incorporate co-call graphs into an approach resembling usage analysis in GHC's Demand Analyser, we now look at how the combined usage analysis in \cref{sec:transfer} relates to Call Arity and the Demand Analyser.
+
+We will begin by looking at how call arity (the analysis result of the Call Arity analysis) can be recovered by a combination of arity analysis and $\eta$-expansion based on $\sUse$. 
+Subsequently, we show how Call Arity arises as a special case of our usage analysis.
+
+For the part of GHC's Demand Analyser that is concerned with usage information \parencite{card} the connection is more obvious, since there is no need to translate between analysis domains.
+
+\subsection{Call Arity and $\eta$-Expansion}
+
+Call Arity \parencite{callarity} presents itself as an arity analysis interleaved with a sharing analysis based on co-call graphs. 
+
+Per-identifier information is a pair of an approximation of the number of calls (\eg at most one \vs many) and the minimum arity of any such calls.
+For one-shot identifiers, it is always safe to $\eta$-expand bound expressions, until their arity matches the number of arguments of the call.
+In the case of multiple calls, $\eta$-expansion might hide the otherwise shared evaluation of the bound expression behind a lambda.
+Hence, the conservative assumption in the thunk case is to discard all analysis information and assume arity 0.
+
+Call Arity annotates every \keyword{let}-binder with this \emph{call arity}, the arity to which the bound expression can be $\eta$-expanded without losing any sharing.
+
+A pair $(n, \alpha)$ of call multiplicity $n$ and minimum arity $\alpha$ is accurately represented as a $\sUsage$ of $n*C^n(\underbrace{C^1(\ldots C^1(U) \ldots)}_{\alpha-1 \text{~times}})$.
+
+Call arity -- or, expanded arity based on usage -- can be recovered from identifier usage and the results of an arity analysis via the following function:
+\[
+  \begin{array}{lcl}
+    \expand_{\sUsage}                              &\,\colon& \sUsage \to \mathbb{N} \to \mathbb{N} \\
+    \expand_{\sUsage}\,A\,\alpha                   &    =   & \alpha \\
+    \expand_{\sUsage}\,(\omega*\uscore[u])\,0      &    =   & 0 \\
+    \expand_{\sUsage}\,(\uscore[\omega]*u)\,\alpha &    =   & \expand_{\sUse}\,u\,\alpha \\
+    \\
+    \expand_{\sUse}                                &\,\colon& \sUse \to \mathbb{N} \to \mathbb{N} \\
+    \expand_{\sUse}\,HU\,\alpha                    &    =   & \alpha \\
+    \expand_{\sUse}\,C^\omega(u)\,0                &    =   & 0 \\
+    \expand_{\sUse}\,C^{\uscore}(u)\,\alpha        &    =   & 1 + \expand_{\sUse}\,u\,(\max\,0\,(\alpha - 1)) \\
+    \expand_{\sUse}\,\uscore\,\alpha               &    =   & \alpha \\
+  \end{array}
+\]
+
+In a nutshell, we can expand beyond arity $\alpha$ as long as the remaining call uses are still one-shot.\smallskip
+
+Absent identifiers could be expanded to arbitrary arity (\eg the bottom of the lattice), but there is no reason to do so.
+For identifier usage, we have to take care of the case where there are multiple use sites and the bound expression is not in WHNF (implied by an arity of 0). 
+As stated above, expanding thunks with multiple uses loses sharing, so we don't do that.
+In the remaining cases, the bound expression is a function or with a one-shot thunk, which we can expand based on call use.
+
+A head use can be treated similarly to the absent case, with the exception that for zero arity we should not expand at all, to avoid surprising interplay with \hsinl{seq}.
+In case of a multi call on an expression of zero arity, arity expansion must stop in order not to lose sharing.
+In the remaining cases of call uses, the bound expression is a function or one-shot.
+Either way, we won't lose shared work by lifting one more lambda to the top-level, so we assume just that and arity expand the hypothetical lambda body with the peeled call use $u$.\medskip
+
+Knowing how to derive call arity from a combination of the results of usage and arity analysis, it stands to reason that Call Arity is generalised by our usage analysis.
+
+However, it is not immediately obvious how the analysis strategy for \keyword{let} bindings is subsumed.
+Because Call Arity does arity expansion based on use sites, it employs a \letupsc strategy for all bindings.
+We talked about the trade-offs of \letupsc \vs \letdnsc in \cref{sec:graph} and \cref{sec:let}, which are adequately summarised by saying that our analysis never yields worse results than always analysing \letupsc-style would.
+
+Other than that, we improve on Call Arity in a number of ways:
+
+\begin{description}
+  \item[Usage signatures] The mixed \letdnsc/\letupsc style allows us to unleash usage signatures at call sites for higher-order information, where Call Arity effectively assumes a usage signature of $\top$.
+  \item[Pair uses] Propagating pair use allows better usage information for functions wrapped in the pair constructor.
+  \item[Call uses] Call uses capture more precisely the analysis information of Call Arity without having to interleave an arity analysis with co-call analysis. Also, there is less of a split between handling thunks and functions.
+\end{description}
+
+\todo{Refer to implementation and/or evaluation chapter}

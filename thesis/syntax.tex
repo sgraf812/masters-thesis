@@ -21,6 +21,7 @@
 
 % Lattice
 \newcommand{\llub}{\sqcup}
+\newcommand{\lbiglub}{\bigsqcup}
 \newcommand{\lleq}{\sqsubseteq}
 \newcommand{\lless}{\sqsubset}
 \newcommand{\lTriple}[3]{\left\langle{}#1,#2,#3\right\rangle{}}
@@ -51,18 +52,22 @@
 \newcommand{\sfop}[1]{\mathsf{#1}}
 \newcommand{\dom}[1]{\sfop{dom}\,#1}
 \newcommand{\zap}{\sfop{zap}}
+\newcommand{\expand}{\sfop{expand}}
 \newcommand{\letup}[2]{#1\!\uparrow_{#2}}
 \newcommand{\letdown}[2]{#1\!\downarrow_{#2}}
 \newcommand{\liftstar}[1]{[#1]^*}
 \newcommand{\liftqm}[1]{[#1]^\sfop{?}}
 \newcommand{\cmblet}[2]{#1\ltimes#2}
 \DeclareMathOperator{\lfp}{lfp}
-\newcommand{\fix}{\keyword{fix}}
 \newcommand*{\cf}{cf.\@\xspace}
+\newcommand*{\vs}{vs.\@\xspace}
 \newcommand*{\eg}{e.g.\@\xspace}
 \newcommand*{\ie}{i.e.\@\xspace}
 
 % Transfer function
 \newcommand{\transfer}[2]{\mathcal{T}\llbracket#1\rrbracket_{#2}}
-\newcommand{\letupsc}{\textsc{LetUp}}
-\newcommand{\letdnsc}{\textsc{LetDn}}
+\newcommand*{\letupsc}{\textsc{LetUp}\xspace}
+\newcommand*{\letdnsc}{\textsc{LetDn}\xspace}
+\newcommand{\fix}{\keyword{fix}\xspace}
+\newcommand{\up}{\sfop{up}}
+\newcommand{\down}{\sfop{down}}
