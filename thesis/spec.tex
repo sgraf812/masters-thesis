@@ -304,7 +304,6 @@ So, in addition to a usage signature, a \emph{usage type} should also include wh
 We're quite lucky, just having developed the appropriate structures to capture this!
 
 We define usage types as triples of a co-call graph $\gamma$ (\cref{sec:graph}) and use environment $\varphi$ (\cref{sec:useenv}) for free variables, as well as a usage signature $\sigma$ to capture usage of possible arguments:
-
 \[
 \theta \in \sUType \Coloneqq \lTriple{\gamma}{\varphi}{\sigma}
 \]
@@ -312,7 +311,6 @@ We define usage types as triples of a co-call graph $\gamma$ (\cref{sec:graph}) 
 Additionally, with the overloaded notation $\theta \setminus_x$ we mean $\theta$, purged by any mentions of $x$ in its co-call graph and use environment.
 
 As hinted at in \cref{sec:useenv}, we can recover free variable usage in the interplay of co-call graph and use environment, denoted by the following lookup syntax:
-
 \[
 \lTriple{\gamma}{\varphi}{\uscore}(x) =
   \begin{cases}
@@ -358,7 +356,6 @@ When put under use $U$ however, both \hsinl{x} and \hsinl{y} are exposed to usag
 That can make a huge difference in computational work, so it is important to always include the use which an expression is put under.
 
 So, the appropriate way to denote a syntactic expression in terms of usage information is in the form of \emph{usage transformers}\footnote{\textcite{card} define these as \emph{generalised} demand transformers, while their notion of ordinary demand transformers best corresponds to an approximation of our usage transformers}:
-
 \[
 \tau \in \sUTrans = \sUse \to \sUType
 \]
@@ -493,13 +490,11 @@ The typical way to do so is via a \emph{transfer function} from expressions to t
 Usage analysis has also been approached via \emph{type inference} in the past \parencite{warnsbrough}, \parencite{verstoep}.
 
 The following subsections will introduce the different cases of the central transfer function
-
 \[
 \transfer{\uscore[x]}{\uscore} \colon \sExp \to \sTransEnv \to \sUTrans
 \]
 
 Where $\sTransEnv$ is an environment mapping local \keyword{let} binders to their denoting usage transformer to be unleashed on use sites:
-
 \[
 \rho \in \sTransEnv = \sVar \pfun \sUTrans
 \]
@@ -507,7 +502,6 @@ Where $\sTransEnv$ is an environment mapping local \keyword{let} binders to thei
 \subsection{Lambda Abstraction}
 
 Let's start by discussing analysis of lambda expressions:
-
 \[
 \transfer{\sLam{x}{e}}{\rho}\,u =
   \begin{cases}
@@ -566,7 +560,6 @@ Note that $\both$ is left-biased with respect to the usage signature.
 Therefore the signature of the whole application expression is that of $e$, relieved by the usage of $x$. 
 
 The seemingly unrelated case of pair literals is handled by the same application mechanism:
-
 \[
 \transfer{\sPair{x_1}{x_2}}{\rho} = \transfer{\sApp{\sApp{\sMkPair}{x_1}}{x_2}}{\rho}
 \]
@@ -629,7 +622,6 @@ For the variable case, we want the following things to happen:
 
 We begin with an auxiliary transformer that captures the first point. 
 This is the definition for $\tau^1_x$, the transformer putting the variable $x$ once under the incoming use $u$:
-
 \[
 \tau^1_x~u = \lTriple{\emptyset}{\maplit{x}{u}}{\top}
 \]
@@ -637,7 +629,6 @@ This is the definition for $\tau^1_x$, the transformer putting the variable $x$ 
 Co-call graph and use environment convey that $x$ is exposed to usage $1*u$, while $\top$ is always a sound approximation to argument usage without knowing more about $x$.
 
 With that in mind, we can have a look at the transfer function for variables:
-
 \[
 \transfer{x}{\rho} =
   \begin{cases}
@@ -658,7 +649,6 @@ We still have to remember the call to $x$ and do so by sequentially composing wi
 Recall that the sequential composition operator $\both$ is left-biased with respect to the usage signature, so the result will have the signature of $\rho(x)$ instead of $\top$.
 
 The remaining first case handles calls to the pair constructor $\sMkPair$ by delegating to another auxiliary usage transformer $\tau_{\sMkPair}$:
-
 \[
 \tau_{\sMkPair}~u =
   \begin{cases}
@@ -1099,7 +1089,7 @@ Subsequently, we show how Call Arity arises as a special case of our usage analy
 
 For the part of GHC's Demand Analyser that is concerned with usage information \parencite{card} the connection is more obvious, since there is no need to translate between analysis domains.
 
-\subsection{Call Arity and $\eta$-Expansion}
+\subsection{Call Arity and $\eta$-Expansion}\label{sec:generalise}
 
 Call Arity \parencite{callarity} presents itself as an arity analysis interleaved with a sharing analysis based on co-call graphs. 
 
