@@ -1155,3 +1155,39 @@ Other than that, we improve on Call Arity in a number of ways:
 \end{description}
 
 \todo{Refer to implementation and/or evaluation chapter}
+
+\subsection{Recovering Demand Analysis}
+
+Our usage analysis bears quite some resemblance to that described in \textcite{card} (henceforth `Cardinality Analysis'), currently implemented in GHC's Demand Analyser.
+
+Since, at the core, we employ the same analysis lattice, comparing the two is much easier than it was for Call Arity.
+In a way, we generalised Cardinality Analysis as much as needed to derive the information produced by Call Arity.
+When we realised that further generalisation would make for a more uniform formulation, we arrived at the transfer function in \cref{sec:transfer}.
+
+This results in an analysis that is strictly more precise than both Call Arity and Cardinality Analysis and that precision can be traded for compiler performance on a broad spectrum (\cf \cref{sec:impl}).
+
+That said, we generalise Cardinality Analysis in several aspects:
+
+\begin{description}
+  \item[Unified \letupsc/\letdnsc] The strictly separated \letupsc and \letdnsc rules have been superseded by an approach that always unleashes usage signatures at call sites \letdnsc-style (also for thunks). Also, in the \letdnsc case we put the bound expression under the precise incoming use instead of digesting the bound expression for the case of a single call with manifest arity (the number of leading lambdas, that is).
+  \item[Co-call graphs] We gain precision for the \letupsc case by tracking the co-call relationship (\cf \cref{sec:graph} and \cref{sec:let}).
+  \item[$\sUse$ \vs $\sUsage$] We treat the \emph{usage} an identifier is exposed to separate from the \emph{use} an expression is put under. This results in a better understanding of what a \emph{one-shot} lambda is and when to utilise which domain in general.
+  \item[Ideal specification] The transfer function serving as a specification captures the essence of the analysis without leaking any implementation details, such as how approximate the usage transformers unleashed through \letdnsc are. Of course, when writing a conference paper, there are good reasons not to do so.
+\end{description}
+
+We will revisit the issues of how approximate we want usage transformers to be in \tod{finite approximation of usage transformers}.
+
+Specifically, we recover Cardinality Analysis by forgetting information and being more approximate in the \letdnsc case, so that a single analysis pass over the bound expression is enough.
+
+In short, we would need to
+
+\begin{itemize}
+  \item Modify the $\letdown{\uscore}{\uscore}$ combinator (\cf \cref{sec:let}) to replace usage signatures by $\bot$ for thunks and to distinguish only the three cases of 
+    \begin{enumerate}
+      \item No call having happened ($u \lless \underbrace{C^1(C^1(\ldots C^1(\uscore)\ldots))}_{n \text{~times}}$ for manifest arity $n$), in which case a usage type of $\bot$ is unleashed.
+      \item A single call with arity higher than manifest arity $n$ has happened ($u\lleq\underbrace{C^1(C^1(\ldots C^1(\uscore)\ldots))}_{n \text{~times}}$). Actually analyse the bound expression through $\tau$ in that case.
+      \item Something stronger than a single call happened. Multiply the extracted usage type by $\omega$ in that case.
+    \end{enumerate}
+  \item Track only self-edges in the co-call graph and conservatively assume all other edges exist. This corresponds to tracking per-identifier usage multiplicity separately instead of in a co-call graph, see \cref{sec:graph}.
+\end{itemize}
+
