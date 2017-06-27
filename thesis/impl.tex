@@ -1,27 +1,106 @@
-\chapter{Entwurf und Implementierung}\label{sec:impl}
+\chapter{Implementation}\label{sec:impl}
 
-Hier wird die eigene Lösung des Problems vorgestellt,
-sowie interessante Details der Implementierung.
-Was also wurde praktisch in dieser Arbeit geleistet?
+This chapter is concerned with the implementation of a usage analysis as specified in \cref{sec:spec} within the Glasgow Haskell Compiler (GHC).
 
-\input{fig/ssaconstr.tex}
+A detailed walkthrough of the Haskell code is out of scope and would not be particularly interesting, so we will instead discuss design decisions and interesting problems we encountered.
 
-Für eigene Grafiken und Diagramme empfehlen wir TikZ
-(TikZ ist kein Zeichenprogramm).
-Damit kann man innerhalb von \TeX Dokumenten Zeichenoperationen angeben.
-Im Gegensatz zu externen Grafiken,
-die per png/jpg/pdf eingebunden werden,
-passt mit TikZ die Schrift exakt zum restlichen Dokument.
-Zwar ist die Einarbeitung schwieriger,
-aber die Qualität ist kaum zu überbieten.
-Ein Beispiel aus einem unserer Paper~\cite{braun13cc}
-siehst du in \cref{fig:optimizations}.
+\section{Object Language}
 
-\input{fig/firm.tex}
+After a Haskell program passes through GHC's frontend, it is compiled down to an explicitly typed core calculus called GHC Core. 
+Core is the first of a number of intermediate languages the program is translated to before an executable artifact is produced.
+Already being vastly simpler than Haskell's huge surface syntax, as can be seen in \cref{fig:core}, Core is still quite complex compared to the object language introduced in \cref{sec:exp}.
 
-Für Firm-Graphen die bei uns im Compilerbau häufig vorkommen,
-haben wir ein extra TiKZ Paket gebaut.
-Dieses erleichtert das Zeichnen von Graphen,
-die wie yComp aussehen.
-\Cref{fig:firm} zeigt ein Beispiel.
+While Core is still unconcerned with operational details, most optimisations within GHC are realised as Core-to-Core passes.
+A non-strict, high-level language like Haskell provides ample opportunities for optimisation even in this macroscopic context.
+The representation as a lambda calculus allows simplification based on term rewriting, which GHC makes great use of in its simplifier.
+Functional languages encourage composition of concise definitions, so GHC supports its optimisations with an aggressive inliner.
+
+Apart from the simplifier, GHC employs other transformations which rely on precise information made available by analyses like GHC's Demand Analyser and Call Arity.
+While the Demand Analyser combines strictness analysis \parencite{dmd} with a usage analysis \parencite{card} and constructed product result analysis \parencite{cpr}, Call Arity is an arity analysis interleaved with a sharing analysis based on co-call graphs, to find out which bindings can be $\eta$-expanded without losing any shared work \tod{move this elsewhere?}.
+
+As is the case for Demand Analysis and Call Arity, our usage analysis will operate on and annotate GHC Core expressions.
+
+\begin{figure}
+  \begin{haskellcode}
+    data Expr b
+      = Var      Id
+      | Lit      Literal
+      | App      (Expr b) (Expr b)
+      | Lam      b (Expr b)
+      | Let      (Bind b) (Expr b)
+      | Case     (Expr b) b Type [Alt b]
+      | Cast     (Expr b) Coercion
+      | Tick     (Tickish Id) (Expr b)
+      | Type     Type
+      | Coercion Coercion
+
+    type Alt b = (AltCon, [b], Expr b)
+
+    data AltCon
+      = DataAlt DataCon
+      | LitAlt  Literal
+      | DEFAULT 
+
+    data Bind b 
+      = NonRec b (Expr b)
+      | Rec [(b, (Expr b))]
+  \end{haskellcode}
+  \caption{Part of the data types representing the syntax of GHC Core}
+  \label{fig:core}
+\end{figure}
+
+\section{Top-level Bindings}
+
+The code of a module in GHC Core is represented as a list of top-level definitions, some of which are exported.
+
+To avoid duplication with the treatment of \keyword{let} bindings, we translate the list of definitions into an expression of nested \keyword{let}s before the analysis and back after the analysis.
+
+Which usage are top-level bindings exposed to? 
+For exported bindings, we don't oversee all potential use sites, so we have to be conservative and assume $\omega*U$. 
+Exported bindings are similar to garbage collection roots: 
+All non-absent bindings must be reachable through an exported binding. 
+This is because for non-exported top-level bindings, their whole scope is known.
+
+Based on this observation, it is also clear what the expression within the innermost \keyword{let} should be: A tuple of the exported identifiers.
+This encoding of modules is common-place in languages like JavaScript (by the name of \emph{Revealing module pattern}) that lack(-ed) a proper module system.
+
+Considering exported identifiers as roots is necessary, but, as it turned out, not sufficient.
+GHC's rewrite rules and vectorisation declarations possibly mention identifiers which are neither exported, nor reachable otherwise, so these must be included in the root set.
+
+A similar problem occurs for \emph{unfoldings}. 
+Unfoldings enable inlining across module boundaries by serialising the \emph{unoptimised} bound expression into the module's interface file, a Haskell-specific compilation artifact like object files.
+These unfoldings play a crucial role in revealing opportunities for custom rewrite rules.
+
+Because unfoldings consist of the unoptimized bound expressions, they potentially reference bindings which are already optimised away or replaced by an optimised variant in the actual object code. 
+As for rewrite rules and vectorisation declarations, ignoring unfoldings can result in surprising behavior and unforeseen crashes due to execution of supposedly absent code.
+
+Correct handling of unfoldings would require to treat them as alternative right-hand sides of the binding they decorate.
+Experimental support for unfoldings in the style of \hsinl{if True then rhs else unfolding} resulted in scoping issues of inner bindings, as well as distortions of analysis results.
+As we didn't observe any crashes related to unfoldings when compiling and running the entire compiler, test suite and benchmark suite, we postponed proper handling of the problem.
+
+Of course, the simplest sufficient root set would be to include all top-level definitions, regardless if exported or not.
+However, that leads to severe performance regressions, as GHC aggressively floats out local bindings to the top-level if possible. 
+Call Arity, in particular, relies on the assumption that only exported identifiers are externally visible to achieve its good results.
+The Demand Analyser, in contrast, goes with the conservative assumption that all top-level bindings are used.
+
+The problems we faced are closely related to the problem GHC's Occurence Analyser tries to solve, but we refrained from mirroring even more unrelated logic into an already quite complex usage analysis.
+
+\section{On `Interesting' Identifiers}
+
+Call Arity utilises co-call graphs for its sharing analysis, which can be quite expensive, because of the inherent quadratic complexity. 
+Although the graph data structure used for co-call graphs allows for efficient insertion, constructing the adjacency set of a node is quite costly.
+
+That is why Call Arity tracks only `interesting' identifiers in its data structures, assuming conservative results for all other identifiers \parencite{callarity}. 
+Identifiers which are deemed interesting have a function type and are locally \keyword{let}-bound.
+This is good enough for the very specific purpose that Call Arity set out to optimize: 
+Formulating the commonly used \hsinl{foldl} as a right fold without causing unnecessary allocation.
+
+Except, we can't make the same assumptions when we also want to generalise the usage analysis within the Demand Analyser.
+From a usage perspective, all bindings carry important usage information. 
+
+Because of the same challenges regarding huge constructor applications outlined in \textcite[section~3.4.1]{callarity}, co-call graphs are the time and space bottleneck of our analysis.
+
+While the previous co-call graph data structure is well-suited for small graphs, the representation as an unreduced union of complete and complete-bipartite graphs makes edge tests require time linear in the size of the union in the worst case. 
+Let alone the unpredictable space usage, possibly exceeding quadratic complexity for the same reason.
+Paired with the requirement imposed by fixed-point iteration to efficiently check co-call graphs for equality, we chose to revise the graph data structure to be represented in a more predictable reduced form, as outlined in \cref{sec:graphrep}.
 
