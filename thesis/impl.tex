@@ -130,8 +130,92 @@ As we saw in \cref{sec:fix}, all denoting usage transformers are monotone, which
 
 However, we can't just naively approximate a function.
 At least we would need an appropriate data structure for monotone maps between lattices.
-But we could even do better by recognising that only ever finitely many (most of the time only one) points of a transformer are accessed!
+Then, we would also need some way of predicting the points where actual steps in the ascending chain happen, otherwise we would still need to compute every point.
+
+However, we don't need to approximate every point of a usage transformer.
+We can do much better by recognising that only ever finitely many (most of the time only one) points of a transformer are accessed!
 
 After all, for the outermost \keyword{let} expression representing the module, the only usage type that we are interested in is that under use $U$.
-From there, we only ever access single points of a usage transformer.
-This bears some challenges 
+To compute that usage type, we only ever access single points of a usage transformer, etc.
+
+So, instead of approximating usage transformers at \emph{every possible point}, we employ a more demand-driven approach and approximate only those points we transitively access from the root expression under use $U$.
+
+\begin{figure}
+  \centering
+  \begin{tikzpicture}
+    \begin{axis}[
+        axis lines = left,
+        ylabel=$\theta$,
+        xtick = {0,0.5,1.5,2},
+        xticklabels = {$A$,$C^1(HU)$,$C^1(U)$,$U$},
+        ytick = \empty,
+      ]
+      \addplot[domain=0:2, color=blue]{(x-1)^3 + 1};
+      \addplot[domain=2:2.5, color=blue]{2};
+      \addplot+[domain=0:0.5, color=red, const plot] coordinates {
+        (0,0) (0.5, 0.875) (1.5, 1.125) (2,2)
+      };
+    \end{axis}
+  \end{tikzpicture}
+  \caption{Sketch of a monotone usage transformer and a monotone approximation in four points. Maps a chain in $\sUse$ to one in $\sUType$.}
+  \label{fig:approx}
+\end{figure}
+
+\Cref{fig:approx} shows a (for illustrative purposes continuous) usage transformer that is approximated in finitely many points. 
+Note that the approximation is stable only in four points, but possibly unstable in all others.
+That doesn't matter much, assuming that only the four stable points are ever accessed.\smallskip
+
+This argument is comparable to the difference in evaluation order between dynamic programming and memoisation: 
+Memoisation follows a demand-driven top-down scheme, whereas dynamic programming computes the solution from the bottom up.
+When the solutions to all subproblems are really needed, both approaches perform the same work.
+
+However consider the following artificial recurrence of a function for fixed naturals $c$ and $p$:
+\[
+  f(n, i) = \begin{cases}
+    n+i, & \text{when } n = 0 \\
+    i*f(n-1, i*c\tpmod{p}), & \text{otherwise}
+  \end{cases}
+\]
+
+Aside from solving this recurrence in some smart way, let's compare how the different approaches would calculate an arbitrary point $f(n,i)$.
+
+A reasonably efficient dynamic programming strategy would need to fill a tableau with $p*n$ entries, starting with the column $f(0,i)$ for all $i$.
+In contrast, memoisation will just need to follow a single thread of $n$ points through the recurrence to compute $f(n,i)$\footnote{Granted, there are no overlapping sub-problems, so no caching is needed at all, but that could be changed by just adding one additional case to the recurrence.}.
+
+To make matters worse, if we removed the modulo operator, we could not solve $f$ with a tableau at all!
+This is the same situation with monotone usage transformers: 
+Without knowing at which points the steps in the strictly ascending chain are made, we cannot compute the monotone map in finite time.
+Also, a memoisation-based (or demand-driven, lazy, top-down, ...) approach computes only those points we are interested in.
+
+Of course, a recurrence like that of \cref{sec:transfer} generalises on problems suited to be solved by dynamic programming and memoisation, in that the definition of a point may directly or indirectly refer to itself (\eg, introducing cycles to the dependency graphs we solve).
+In terms of a solution strategy, for a typical memoisation problem, it is sufficient to memoise already computed results in some kind of map. 
+For a recurrence however, we need to propagate updates of unstable points, leading to the usual graph-based fixed-point iteration techniques such as the worklist algorithm.
+
+\section{Fixed-point Iteration}
+
+Analyses within GHC are commonly guided by the structure of the syntax tree.
+This is attractive from the point of view of simplicity:
+An analysis is just a fold over the expression, returning the annotated expression.
+
+However, for our analysis and with the approach from the last section, we encounter a problem at bindings like \hsinl{let f x = x in e}: 
+How can we know at which uses we need to calculate the usage transformer of \hsinl{f} without looking at \hsinl{e}?
+We know for sure at the call sites of \hsinl{f}, so we can just approximate its usage transformer on demand \emph{while analysing} \hsinl{e} and memoise it through laziness.
+
+This gets complicated really quickly if we add recursive binding groups:
+\begin{haskellcode}
+  let fac n = 
+        if n == 1 
+        then 1 
+        else n * fac (n-1)
+  in fac 12
+\end{haskellcode}
+
+When we hit the call to \hsinl{fac} in the body, we have to query the approximated usage transformer for a stable value at the incoming call use.
+For this, we have to perform fixed-point iteration, assuming a very optimistic $\bot$ usage transformer (or a prior approximation) for \hsinl{fac} and iterate until the usage type for the requested use doesn't change any more.
+This means we have to flag any reference to unstable points of the usage transformer.
+
+Hinting at mutual recursion and recursive calls in different uses, it should have become clear that going down this route quickly becomes too complex to follow and implement. 
+That is why analyses like the Demand Analyser deliberately settled for analysing bound expressions before the body and vice versa, embodied in the \letdnsc and \letupsc rules, respectively. 
+These are discussed in \textcite[section~3.5--3.6]{card} and \cref{sec:let}.
+
+\todo{Discards old results on next iteration}

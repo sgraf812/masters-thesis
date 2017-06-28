@@ -63,6 +63,9 @@
 \newcommand*{\vs}{vs.\@\xspace}
 \newcommand*{\eg}{e.g.\@\xspace}
 \newcommand*{\ie}{i.e.\@\xspace}
+\makeatletter
+\newcommand{\tpmod}[1]{{\@displayfalse\pmod{#1}}}
+\makeatother
 
 % Transfer function
 \newcommand{\transfer}[2]{\mathcal{T}\llbracket#1\rrbracket_{#2}}
