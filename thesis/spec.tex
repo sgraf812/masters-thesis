@@ -1021,7 +1021,7 @@ As \textcite[102--104]{callarity} points out, one-shot recursive bindings are ra
 
 When iteration of $\up$ finally reached a fixed-point, all that remains is to strip off the identifiers from the resulting usage type.
 
-\subsubsection{Existence of the Fixed-point and Termination}
+\subsubsection{Existence of the Fixed-point and Termination}\label{sec:fix}
 
 As noted at the begin of \cref{sec:letrec}, proofs for the existence of fixed-points in the two occurences of $\fix$ are non-trivial. 
 At the same time, a rigorous proof is out of scope for this thesis (with respect to both extent and time), so this section will just provide a short sketch.\medskip
@@ -1064,23 +1064,17 @@ Enter pair uses. The following strictly ascending chain of arbitrary length $n$ 
   A \lless 1*U(1*U, A) \lless 1*U(1*U, 1*(1*U, A)) \lless \ldots \lless (1*U(1*U,\uscore))^n\,A
 \]
 
-\todo{Move this to the implementation chapter and reference it}
-
-This actually happens for usage signatures of coinductive definitions, which are permitted in a lazy functional language like Haskell and can also be emulated in strict languages through explicitly delayed computations. 
-Consider this snippet on lazy streams:
-
-\begin{haskellcode}
-  data IntStream = MkStream Int IntStream
-
-  triple :: IntStream -> IntStream
-  triple (MkStream x xs) = MkStream (3 * x) (triple xs)
-\end{haskellcode}
-
-Approximation of the usage transformer of \hsinl{triple} will begin with $\bot$. If put under use $U$, the usage on the first argument will ascend to $1*U(1*U, A)$, then to $1*U(1*U, 1*U(1*U, A))$ and so on.
-
 In practice, and that's also what the implementation of \textcite{card} within GHC does, we have to artificially bound the depth of pair uses for the analysis to terminate.
 
-\section{Relationship to Call Arity and Demand Analysis}
+We will revisit this in \cref{sec:bound}, where we discuss implementation details regarding efficient approximation of usage transformers.
+
+Monotonicity of usage transformers is also imperative to showing the ascending chain condition for them. 
+Otherwise, there is always a chain of usage transformers that ascend at arbitrarily deep call uses.
+
+Of course, just showing termination does not make any guarantees with respect to runtime complexity. 
+\Cref{sec:approx} discusses efficient approximation of usage transformers in more detail.
+
+\section{Relationship to Call Arity and Demand Analysis}\label{sec:generalise}
 
 As we jumped through quite some hoops in this chapter to incorporate co-call graphs into an approach resembling usage analysis in GHC's Demand Analyser, we now look at how the combined usage analysis in \cref{sec:transfer} relates to Call Arity and the Demand Analyser.
 
@@ -1089,7 +1083,7 @@ Subsequently, we show how Call Arity arises as a special case of our usage analy
 
 For the part of GHC's Demand Analyser that is concerned with usage information \parencite{card} the connection is more obvious, since there is no need to translate between analysis domains.
 
-\subsection{Call Arity and $\eta$-Expansion}\label{sec:generalise}
+\subsection{Call Arity and $\eta$-Expansion}
 
 Call Arity \parencite{callarity} presents itself as an arity analysis interleaved with a sharing analysis based on co-call graphs. 
 

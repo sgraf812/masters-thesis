@@ -102,5 +102,36 @@ Because of the same challenges regarding huge constructor applications outlined 
 
 While the previous co-call graph data structure is well-suited for small graphs, the representation as an unreduced union of complete and complete-bipartite graphs makes edge tests require time linear in the size of the union in the worst case. 
 Let alone the unpredictable space usage, possibly exceeding quadratic complexity for the same reason.
-Paired with the requirement imposed by fixed-point iteration to efficiently check co-call graphs for equality, we chose to revise the graph data structure to be represented in a more predictable reduced form, as outlined in \cref{sec:graphrep}.
+Paired with the requirement imposed by fixed-point iteration to efficiently check co-call graphs for equality, we chose to revise the graph data structure to be represented in a more predictable reduced form, as explained in \cref{sec:graphrep}.
 
+\section{Bounding Product Uses}\label{sec:bound}
+
+As pointed out in \cref{sec:fix}, we need to make sure to bound the depth of product uses in order for the domain of monotone usage transformers to satisfy the ascending chain condition, giving some guarantee of termination.
+
+Otherwise, the mentioned infinitely ascending chain actually occurs for usage signatures of coinductive definitions. 
+Such definitions are permitted in a lazy functional language like Haskell and can also be emulated in strict languages through explicitly delayed computations. 
+Consider this snippet on lazy streams:
+
+\begin{haskellcode}
+  data IntStream = MkStream Int IntStream
+
+  triple :: IntStream -> IntStream
+  triple (MkStream x xs) = MkStream (3 * x) (triple xs)
+\end{haskellcode}
+
+Approximation of the usage transformer of \hsinl{triple} will begin with $\bot$. If put under use $U$, the usage on the first argument will ascend to $1*U(1*U, A)$, then to $1*U(1*U, 1*U(1*U, A))$ and so on.
+
+We currently bound the depth of product uses to 10, which is quite arbitrary. 
+Termination time, however, is affected exponentially by the cut-off depth.
+
+\section{Approximating Usage Transformers}\label{sec:approx}
+
+As we saw in \cref{sec:fix}, all denoting usage transformers are monotone, which is a necessary condition for termination of the analysis.
+
+However, we can't just naively approximate a function.
+At least we would need an appropriate data structure for monotone maps between lattices.
+But we could even do better by recognising that only ever finitely many (most of the time only one) points of a transformer are accessed!
+
+After all, for the outermost \keyword{let} expression representing the module, the only usage type that we are interested in is that under use $U$.
+From there, we only ever access single points of a usage transformer.
+This bears some challenges 
