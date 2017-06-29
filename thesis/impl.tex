@@ -20,7 +20,7 @@ While the Demand Analyser combines strictness analysis \parencite{dmd} with a us
 
 As is the case for Demand Analysis and Call Arity, our usage analysis will operate on and annotate GHC Core expressions.
 
-\begin{figure}
+\begin{figure}[h]
   \begin{haskellcode}
     data Expr b
       = Var      Id
@@ -140,7 +140,7 @@ To compute that usage type, we only ever access single points of a usage transfo
 
 So, instead of approximating usage transformers at \emph{every possible point}, we employ a more demand-driven approach and approximate only those points we transitively access from the root expression under use $U$.
 
-\begin{figure}
+\begin{figure}[h]
   \centering
   \begin{tikzpicture}
     \begin{axis}[
@@ -191,7 +191,7 @@ Of course, a recurrence like that of \cref{sec:transfer} generalises on problems
 In terms of a solution strategy, for a typical memoisation problem, it is sufficient to memoise already computed results in some kind of map. 
 For a recurrence however, we need to propagate updates of unstable points, leading to the usual graph-based fixed-point iteration techniques such as the worklist algorithm.
 
-\section{Fixed-point Iteration}
+\section{Solving Data-flow Problems}
 
 Analyses within GHC are commonly guided by the structure of the syntax tree.
 This is attractive from the point of view of simplicity:
@@ -216,6 +216,79 @@ This means we have to flag any reference to unstable points of the usage transfo
 
 Hinting at mutual recursion and recursive calls in different uses, it should have become clear that going down this route quickly becomes too complex to follow and implement. 
 That is why analyses like the Demand Analyser deliberately settled for analysing bound expressions before the body and vice versa, embodied in the \letdnsc and \letupsc rules, respectively. 
-These are discussed in \textcite[section~3.5--3.6]{card} and \cref{sec:let}.
+These were discussed in \textcite[section~3.5--3.6]{card} and \cref{sec:let}.
 
-\todo{Discards old results on next iteration}
+Another drawback is that techniques which are concerned with computing fixed-points, but are otherwise orthogonal to the analysis implemented, are intertwined with the analysis logic.
+Analysis order depending on the syntactic structure is just a minor example of this. 
+A less simple technique is that of caching of analysis results described in \textcite[section~9.2]{dmd}. 
+
+All these approaches are present in every analysis within GHC (or they would benefit from them, at least) and every analysis for itself may get it wrong in a particular way, let alone the increase in cognitive complexity.
+
+Looking at compilers for imperative programming languages, data-flow problems are solved by fixed-point iteration over the control flow graph (or over a graph-based intermediate representation \parencite{firm}, \parencite{thorium}) and is broken down into two parts.
+
+An \emph{iteration strategy} determines which nodes in the data-flow graph are still unstable and need to be recomputed, and the order in which to do so. 
+The chosen strategy is completely opaque to the data-flow framework to solve, but severely impacts the time it takes to arrive at a stable solution.
+Commonly, the nodes which need to be updated are tracked within a \emph{worklist} in order not to update currently stable nodes.
+The order in which the worklist processes unstable nodes also affects performance \parencite{dfa}.
+The caching of analysis results between iterations \parencite{dmd} is a nice side-effect of the explicit graph abstraction.
+
+Additionally, associated with each node is a \emph{transfer functions} which has the single responsibility of recomputing analysis information in terms of the current state of its dependencies.
+
+Driven by the looming complexity in analysis order, we decided to break down our analysis in a similar manner.
+In an effort to specify transfer functions separate from the iteration strategy, we arrived at the (slightly simplified) interface in \cref{fig:worklist}.
+
+\begin{figure}[h]
+  \centering
+  \begin{haskellcode}
+    runFramework 
+      :: Ord node
+      -> DataFlowFramework node lattice 
+      -> Set node 
+      -> Map node lattice
+    runFramework = ...
+
+    data DataFlowFramework node lattice = DFF 
+          (node -> TransferFunction node lattice lattice)
+          (node -> ChangeDetector node lattice)
+
+    type ChangeDetector node lattice
+      = lattice -> lattice -> Bool
+
+    data TransferFunction node lattice a
+      = TFM (State (WorklistState node lattice) a) -- not exported!
+      deriving (Functor, Applicative, Monad)
+
+    dependOn
+      :: Ord node 
+      => node 
+      -> TransferFunction node lattice (Maybe lattice)
+    dependOn
+  \end{haskellcode}
+  \caption{The essence of the \texttt{utils/Worklist.hs} module.}
+  \label{fig:worklist}
+\end{figure}
+
+A \hsinl{DataFlowFramework} assigns to each abstract \hsinl{node} a \hsinl{TransferFunction} and a \hsinl{ChangeDetector} that compares the old value with the updated value to detect when the node has become stable.
+
+Although we purposefully named the type variable denoting the analysis domain \hsinl{lattice}, we don't actually require it to model any kind of algebraic structure.
+This is something we come back to in \cref{sec:mono}\tod{come back to it}.
+
+The first two type parameters of \hsinl{TransferFunction} specify in what kind of data-flow framework the function operates, while the last parameter corresponds to the return value of that \hsinl{TransferFunction}.
+Talking about what a transfer function `returns' might not make much sense just yet, but the derived \hsinl{Monad} instance hints at how this will turn out.
+As always, a \hsinl{Monad} instance is useful to weave effects into otherwise pure computations. 
+We can see that \hsinl{TransferFunction} is just an opaque wrapper around a stateful computation, but have no way of conjuring such a side-effect apart from cheating our way in with \hsinl{pure}.
+
+The single means for introducing a `side-effect' is through \hsinl{dependOn}, which announces an edge in the data-flow graph by referencing the value of another node.
+Depending on whether the iteration strategy can provide a value (at least cycles in the graph have to be broken at some point), it may or may not return a value, in which case the \hsinl{TransferFunction} is obliged to continue with an optimistic approximation (\eg $\bot$).
+
+Note that just by executing the \hsinl{TransferFunction} in another \hsinl{WorklistState}, we can iterate a transfer function in a completely isolated manner.
+The iteration strategy decides if the value of a node is immediately to be recomputed in a call to \hsinl{dependOn}, or if a value from a prior iteration is to be returned, or none at all.
+
+The \hsinl{Ord} instance on \hsinl{node}, apart from being necessary for use as key in a \hsinl{Map}, serves as a priority on the nodes in the worklist.
+By choosing a total order that mirrors how an analysis would proceed along the syntax tree, we are promised fast convergence by GHC's Occurence Analyser which arranged bindings in a suitable order.
+
+In practice, we modeled each single point of a usage transformer as a separate node. 
+This resulted in a specialisation of \hsinl{node} to \hsinl{(FrameworkNode, Use)}\footnote{Of course, the total order on \hsinl{Use} is not actually compatible with the join-semilattice we usually refer to and doesn't have any semantic meaning.}, where the total order on \hsinl{FrameworkNode} mirrors the syntax tree, and \hsinl{lattice} to \hsinl{(UsageType, CoreExpr)}, where the returned \hsinl{CoreExpr} is annotated with the findings of the analysis.
+As it turned out, we lost important structure in forgetting about monotonicity (\cf \cref{sec:mono}).
+
+\todo{Where we set FrameworkNodes and what ChangeDetectors, some example graph probably}
