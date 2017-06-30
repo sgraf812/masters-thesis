@@ -191,7 +191,7 @@ Of course, a recurrence like that of \cref{sec:transfer} generalises on problems
 In terms of a solution strategy, for a typical memoisation problem, it is sufficient to memoise already computed results in some kind of map. 
 For a recurrence however, we need to propagate updates of unstable points, leading to the usual graph-based fixed-point iteration techniques such as the worklist algorithm.
 
-\section{Solving Data-flow Problems}
+\section{Solving the Data-flow Problem}
 
 Analyses within GHC are commonly guided by the structure of the syntax tree.
 This is attractive from the point of view of simplicity:
@@ -289,6 +289,16 @@ By choosing a total order that mirrors how an analysis would proceed along the s
 
 In practice, we modeled each single point of a usage transformer as a separate node. 
 This resulted in a specialisation of \hsinl{node} to \hsinl{(FrameworkNode, Use)}\footnote{Of course, the total order on \hsinl{Use} is not actually compatible with the join-semilattice we usually refer to and doesn't have any semantic meaning.}, where the total order on \hsinl{FrameworkNode} mirrors the syntax tree, and \hsinl{lattice} to \hsinl{(UsageType, CoreExpr)}, where the returned \hsinl{CoreExpr} is annotated with the findings of the analysis.
-As it turned out, we lost important structure in forgetting about monotonicity (\cf \cref{sec:mono}).
+As it turned out, we lost important structure in forgetting about monotonicity (\cf \cref{sec:mono}).\smallskip
+
+Allocating \hsinl{FrameworkNode}s for every syntactic element enables caching of intermediate results and avoids whole chains of nodes to be recomputed when no change is detected.
+On the other hand, the bookkeeping in the iteration algorithm might outweigh any performance benefits of caching.
+Without any numbers to justify, we decided to only allocate \hsinl{FrameworkNode}s where we needed to break cycles in the data-flow graph.
+Cycles arise exactly where we used the \fix operator to tie knots in \cref{sec:letrec}, thus we allocate nodes for the right-hand sides of bindings and for whole \keyword{let} bindings.
+
+
+Other than that, we have to allocate a node for the module expression and then kick off itartion blah.
 
 \todo{Where we set FrameworkNodes and what ChangeDetectors, some example graph probably}
+
+\todo{Other stuff: Coercions}
