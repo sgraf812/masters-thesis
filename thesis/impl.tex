@@ -252,7 +252,7 @@ In an effort to specify transfer functions separate from the iteration strategy,
           (node -> ChangeDetector node lattice)
 
     type ChangeDetector node lattice
-      = lattice -> lattice -> Bool
+      = Set node -> lattice -> lattice -> Bool
 
     data TransferFunction node lattice a
       = TFM (State (WorklistState node lattice) a) -- not exported!
@@ -268,7 +268,8 @@ In an effort to specify transfer functions separate from the iteration strategy,
   \label{fig:worklist}
 \end{figure}
 
-A \hsinl{DataFlowFramework} assigns to each abstract \hsinl{node} a \hsinl{TransferFunction} and a \hsinl{ChangeDetector} that compares the old value with the updated value to detect when the node has become stable.
+A \hsinl{DataFlowFramework} assigns to each abstract \hsinl{node} a \hsinl{TransferFunction} and a \hsinl{ChangeDetector} that compares the old value with the updated value to detect when the node has become stable. 
+For reasons becoming clear later on, the \hsinl{ChangeDetector} is also supplied the set of referenced \hsinl{node}s that changed since the last iteration.
 
 Although we purposefully named the type variable denoting the analysis domain \hsinl{lattice}, we don't actually require it to model any kind of algebraic structure.
 This is something we come back to in \cref{sec:mono}\tod{come back to it}.
@@ -293,12 +294,140 @@ As it turned out, we lost important structure in forgetting about monotonicity (
 
 Allocating \hsinl{FrameworkNode}s for every syntactic element enables caching of intermediate results and avoids whole chains of nodes to be recomputed when no change is detected.
 On the other hand, the bookkeeping in the iteration algorithm might outweigh any performance benefits of caching.
-Without any numbers to justify, we decided to only allocate \hsinl{FrameworkNode}s where we needed to break cycles in the data-flow graph.
-Cycles arise exactly where we used the \fix operator to tie knots in \cref{sec:letrec}, thus we allocate nodes for the right-hand sides of bindings and for whole \keyword{let} bindings.
+Without having done any benchmarks to justify, we decided to only allocate \hsinl{FrameworkNode}s where we needed to break cycles in the data-flow graph.
+Cycles arise exactly where we used the \fix operator to tie knots in \cref{sec:letrec}, thus at least we need to allocate nodes for the right-hand sides of bindings (referred to as \letdnsc nodes) and for whole \keyword{let} bindings (\letupsc nodes).
 
+Of course, just by allocating nodes the feedback cycles aren't broken yet:
+We need to detect when an iteration of a node does not change anymore. 
+For usage types, detecting change is pretty standard by delegating to the derived \hsinl{Eq} and can be sped up considerably by exploiting monotonicity.
+As an example, we can avoid potentially quadratic time comparison of co-call graphs by just checking if the number of total edges changed.
 
-Other than that, we have to allocate a node for the module expression and then kick off itartion blah.
+Detecting changes in the annotated syntax tree isn't so cheap. 
+In fact, traversing entire expressions is infeasible for huge modules from a performance perspective.
+We can rely on another convenient fact, though:
+Annotated expressions only depend on subexpressions and themselves don't introduce dependency cycles.
+This means that when the only referenced node that changed was the current node itself, there was no change to the annotated expression.
 
-\todo{Where we set FrameworkNodes and what ChangeDetectors, some example graph probably}
+That is why \hsinl{ChangeDetector}s are supplied the set of changed references:
+Apart from checking usage types for changes, it checks if the only reference that changed was the node itself.
 
-\todo{Other stuff: Coercions}
+Other than that, we have to allocate a node (\hsinl{root} in the example that follows) for the module expression to have a way to refer to it and then kick off iteration with a call to \hsinl{runFramework} like the following:
+\begin{haskellcode}
+  result :: Map (FrameworkNode, Use) (UsageType, CoreExpr)
+  result = runFramework framework (Set.singleton (root, topUse))
+\end{haskellcode}
+
+By passing the singleton set as the second argument, we express that the module expression is put under top use $U$.
+From there, the iteration algorithm begins to explore the data-flow graph in a depth-first fashion, which -- as we already pointed out at the begin of this section -- is crucial for termination, as the graph is infinite, while the nodes reachable from \hsinl{(root, topUse)} is finite \tod{Maybe some kind of visualisation?}.
+
+\begin{example}
+  Consider the following example module, computing the factorial of 12:
+  \begin{haskellcode}
+    module Main (main) where
+
+    fac n = 
+      if n <= 1 
+      then 1 
+      else n * fac (n - 1)
+
+    main = print (fac 12)
+  \end{haskellcode}
+
+  This will be translated to the following module expression:
+  \begin{haskellcode}
+    let fac n =
+          if n <= 1
+          then 1
+          else n * fac (n - 1)
+    in let main = print (fac 12)
+       in (main) -- This is a 1-tuple, e.g. a boxed constructor
+  \end{haskellcode}
+
+  \begin{figure}[h]
+    \begin{tikzpicture}
+
+    \end{tikzpicture}
+    \caption{Relevant part of the data-flow framework for the \hsinl{fac} example. The module node is drawn in red, \letupsc nodes are blue and \letdnsc nodes are green.}
+    \label{fig:framework}
+  \end{figure}
+
+  \Cref{fig:framework} depicts the resulting data-flow framework, or rather the finite part reachable from node $(\hsinl{root}, U)$ (again, \hsinl{root} represents the usage transformer denoting the module expression). 
+
+  The iteration algorithm will start with iterating the \hsinl{TransferFunction} of the module expression, represented by the red node, under use $U$ and then proceed in the following order:\footnote{Note that we effectively \hsinl{uncurry} our transfer function from \cref{sec:transfer}, turning something of type $\sExp \to \sUse \to \sUType$ into something of type $\sExp \times \sUse \to \sUType$. Thus, \hsinl{TransferFunction} transfers expressions into the domain of usage types instead of usage transformers (see \cref{sec:mono} on impliciations for monotonicity).}
+
+  \begin{enumerate}
+    \item 
+      The transfer function associated with $(\hsinl{root}, U)$ forwards to the \letupsc node of the \keyword{let} expression binding \hsinl{fac} in the same use, $(\keyword{let}_1, U)$ in blue.
+    \item 
+      The depth-first strategy immediately descends into said \letupsc node.
+      Since the binding for \hsinl{fac} is recursive, the \letupsc node \hsinl{dependsOn} itself, for usage of \hsinl{fac} in the last iteration.
+      This is the first iteration, so \hsinl{dependOn} returns \hsinl{Nothing} and the usage in the body serves as a first approximation.
+    \item 
+      The body of the outer \keyword{let} is the inner \keyword{let} binding for \hsinl{main}, represented by another blue node $(\keyword{let}_2, U)$.
+      Since \hsinl{main} is non-recursive, looking at usages in the body is sufficient.
+    \item The incoming use $U$ translates into a use of $U \equiv U(\omega*U)$ on the implied 1-tuple \hsinl{main}, which causes a dependency on the \letdnsc node of \hsinl{main} in use $U$ (\letdnsc nodes are green).
+    \item 
+      We immediately descend into said \letdnsc node, where the use $U$, through \hsinl{print}, puts \hsinl{fac} under a call use $C^1(U)$. 
+    \item 
+      After descending into (`calling') the \letdnsc node \hsinl{fac}, the analysis tries to recurse into $(\hsinl{fac}, C^1(U))$. 
+      This cycle is broken by returning \hsinl{Nothing} from \hsinl{dependOn}; the analysis will compensate for that by unleashing a usage type of $\bot$ at the call site.
+      The result is a (first, approximate) usage type of $\lTriple{\emptyset}{\maplit{\hsinl{fac}}{C^1(U)}}{1*U \to \top}$ for $(\hsinl{fac}, C^1(U))$.
+      (An irrelevant fact, because we don't use the annotated expression: The argument to the bound expression is annotated too optimistically as being single-entry and the lambda as one-shot.)
+    \item
+      Analysis of the expression bound to \hsinl{main} continues.
+      The call use on $\hsinl{fac}$ gets sequentially combined with the call use from the unleashed \letdnsc node, for a total call use of $C^\omega(U) \equiv U$.
+      Nothing iteresting happens to the literal $12$, thus the usage type of the \letdnsc node for $(\hsinl{main}, U)$ is $\lTriple{\{(\hsinl{fac}, \hsinl{fac})\}}{\maplit{\hsinl{fac}}{U}}{\top}$.
+      However, because \hsinl{main}'s bound expression is not in WHNF, only the uninteresting usage signature is propagated to the call site within $(\keyword{let}_2, U)$.
+      Note that the annotated expression would be calculated at this point, too. 
+      We don't need it at the call site, but when we handle the \keyword{let} binding in the next step.
+    \item
+      Unwinding the call stack once more, the inner \keyword{let} binding for \hsinl{main} is now resolved as part of the \letupsc node $(\keyword{let}_2, U)$.
+      The usage \hsinl{main} is exposed to in the body is $\omega*U$.
+      Thus, there is a dependency on the \letdnsc node $(\hsinl{main},U)$, at least for the annotated expression.
+      The algorithm just iterated that node in the last step, so its result is reused.
+      Since the expression bound to \hsinl{main} is not in WHNF, we also unleash the associated usage type, resulting in a usage type of $\lTriple{\{(\hsinl{fac}, \hsinl{fac})\}}{\maplit{\hsinl{fac}}{U}}{\top}$ for the whole inner \keyword{let} expression.
+    \item
+      Another unwind resumes analysis in the \letupsc node $(\keyword{let}_1, U)$, the binding for \hsinl{fac}.
+      The body exposes \hsinl{fac} to a usage of $\omega*U$, even before sequentially composition with itself induced by the recursive \keyword{let} case.
+      Although the right-hand side of \hsinl{fac} is in WHNF (so usage types have been unleashed at call sites), we still need the annotated expression under use $U$.
+      This introduces a dependency on the \letdnsc node $(\hsinl{fac}, U)$ for which there is no value yet, causing the algorithm to do a `call'.
+    \item
+      Analysis of \hsinl{fac} under use $U$ yields the same usage type as under use $C^1(U)$, but that is quite irrelevant.
+      More importantly, the lambda is not one-shot and the argument binder for \hsinl{n} is not single-entry, contrary to the optimistic situation under use $C^1(U)$.
+      Also, $(\hsinl{fac}, U)$ is not `recursive', rather it depends on $(\hsinl{fac}, C^1(U))$.
+    \item
+      Unwinding to $(\keyword{let}_1, U)$ again, this results in an uninteresting usage type $\lTriple{\emptyset}{\emptymap}{\top}$ for the annotated expression.
+    \item
+      Finally, analysis proceeds in the top-level $(\hsinl{root}, U)$ node, which just forwards the results from $(\keyword{let}_1, U)$.
+    \item 
+      Now the actual worklist algorithm takes over:
+      While computing the current approximation, we were using unstable results (\eg where \hsinl{dependOn} returned \hsinl{Nothing}) for $(\hsinl{fac}, C^1(U))$ and $(\keyword{let}_1, U)$.
+    \item
+      $(\hsinl{fac}, C^1(U))$ has the higher priority, so it is iterated first.
+      This results in a more precise usage type of $\lTriple{\{\hsinl{fac}, \hsinl{fac}\}}{\maplit{\hsinl{fac}}{U}}{\top}$.
+      The change marks the referrers $(\hsinl{fac}, C^1(U))$, $(\hsinl{fac}, U)$ and $(\hsinl{main}, U)$unstable.
+    \item
+      After one more iteration, $(\hsinl{fac}, C^1(U))$ is deemed stable.
+      Although irrelevant, the annotated expression stayed the same.
+    \item
+      Next highest priority node is $(\hsinl{fac}, U)$, where the change on $(\hsinl{fac}, C^1(U))$ yields the same usage type (which was not used) and the same annotations.
+      The change in usage type marks its referrer $(\keyword{let}_1, U)$ as unstable once more.
+    \item
+      In $(\hsinl{main}, U)$, the changes in $(\hsinl{fac}, C^1(U))$ did not make a difference at all, so the node is still stable.
+      Hence, no need to reiterate $(\keyword{let}_2, U)$.
+    \item
+      The only unstable node left is $(\keyword{let}_1, U)$.
+      The usage type from the last iteration is unchanged, but the annotations in \hsinl{fac} changed. 
+      So its referrers $(\keyword{let}_1, U)$ and $(\hsinl{root}, U)$ are marked as unstable.
+    \item
+      Another iteration on $(\keyword{let}_1, U)$ reveals no further change.
+    \item
+      Finally, the $(\hsinl{root}, U)$ node is iterated and marked as changed because of annotations in sub-expressions.
+      That however does not mark any referrer as unstable, since there are none.
+    \item
+      The algorithm returns current stable graph as a map from nodes to results.
+  \end{enumerate}
+
+\end{example}
+
+\todo{Other stuff: Where and what we annotate, Why not through Map, Coercions, imported Ids}
