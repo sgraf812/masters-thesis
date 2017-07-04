@@ -1,6 +1,6 @@
 BUILD=build
 BASE=thesis
-DEPS=$(shell find . -name "*.tex") $(shell find . -name "*.sty")
+DEPS=$(shell find . -name "*.tex") $(shell find . -name "*.sty") $(shell find . -name "*.dot")
 
 default: $(BASE).pdf
 

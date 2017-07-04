@@ -146,13 +146,14 @@ So, instead of approximating usage transformers at \emph{every possible point}, 
     \begin{axis}[
         axis lines = left,
         ylabel=$\theta$,
+        ymin = 0.1,
         xtick = {0,0.5,1.5,2},
-        xticklabels = {$A$,$C^1(HU)$,$C^1(U)$,$U$},
+        xticklabels = {$HU$,$C^1(HU)$,$C^1(U)$,$U$},
         ytick = \empty,
       ]
       \addplot[domain=0:2, color=blue]{(x-1)^3 + 1};
       \addplot[domain=2:2.5, color=blue]{2};
-      \addplot+[domain=0:0.5, color=red, const plot] coordinates {
+      \addplot+[domain=0:0.5, color=red, const plot] coordinates {%
         (0,0) (0.5, 0.875) (1.5, 1.125) (2,2)
       };
     \end{axis}
@@ -185,13 +186,78 @@ In contrast, memoisation will just need to follow a single thread of $n$ points 
 To make matters worse, if we removed the modulo operator, we could not solve $f$ with a tableau at all!
 This is the same situation with monotone usage transformers: 
 Without knowing at which points the steps in the strictly ascending chain are made, we cannot compute the monotone map in finite time.
-Also, a memoisation-based (or demand-driven, lazy, top-down, ...) approach computes only those points we are interested in.
+Also, a memoisation-based (or demand-driven, lazy, top-down, \dots) approach computes only those points we are interested in.
 
 Of course, a recurrence like that of \cref{sec:transfer} generalises on problems suited to be solved by dynamic programming and memoisation, in that the definition of a point may directly or indirectly refer to itself (\eg, introducing cycles to the dependency graphs we solve).
 In terms of a solution strategy, for a typical memoisation problem, it is sufficient to memoise already computed results in some kind of map. 
-For a recurrence however, we need to propagate updates of unstable points, leading to the usual graph-based fixed-point iteration techniques such as the worklist algorithm.
+For a recurrence however, we need to propagate updates of unstable points, leading to the usual data-flow frameworks solved through fixed-point iteration.
 
-\section{Solving the Data-flow Problem}
+\section{Annotations}
+
+The abstract specification in \cref{sec:transfer} leaves out many details a real implementation must account for.
+
+The most glaring simplification is that of returning analysis results. 
+The specification describes how to interpret an expression abstractly with respect to usage, but forgets to actually announce its findings!
+
+A real implementation would thus thread an annotated expression as an additional output. 
+Our usage analysis is no different, in fact we annotate the same information as \textcite{card} does:
+
+\begin{enumerate}
+  \item When analysing lambda expressions, we mark the lambda as \emph{one-shot} if the incoming use is of the form $C^1(\uscore)$.
+  \item We annotate any binder with the usage recorded in the usage type relative to incoming use. This applies to lambda binders (after we multiply body usage, but before we delete the binder from the usage type), \keyword{case} binders, data constructor fields and of course \keyword{let} binders (looked up after the fixed-point of $\up$ is reached, before we delete the binders of the group).
+\end{enumerate}
+
+Note that the annotations depend on the incoming use. 
+This means annotations only make sense when the use is a conservative approximation to every possible use.
+We see in \cref{sec:solve} an example where use on a call site produces too optimistic annotations, which of course are not used.
+
+If at one point an expression is absent (which happens only for \keyword{let} bound expression or arguments), we mark all binders in that expression as absent.
+
+In order to enable more precise results across module boundaries, \textcite{dmd} provided \emph{demand signatures} for each exported function in the module's interface file. 
+This was extended by \textcite{card} to usage signatures, and as such we also annotate each exported function with its usage signature.
+
+Note that by the time we import a function, its free variable usage is uninteresting:
+The environments would only mention free variables which were already compiled and whose usage was conservatively approximated because of unforeseeable use sites.
+Hence the usage signature captures all important information.
+
+Now, the usage signature of an expression alone has no semantic meaning without the use it was produces under.
+The annotated usage signature is actually a digest of the full usage transformer, approximated at three prominent points.
+From a usage signature for an incoming call use corresponding to the arity $\alpha$ (as computed by an arity analysis) of the expression, we can derive the following usage transformer:
+\[
+  \tau_x~u = \begin{cases}
+    \bot, & \text{when } u \lless \underbrace{C^1(C^1(\ldots C^1(\uscore)\ldots))}_{\alpha~\text{times}} \\
+    \lTriple{\emptyset}{\emptymap}{\sigma}, & \text{when } u \lleq \underbrace{C^1(C^1(\ldots C^1(U)\ldots))}_{\alpha~\text{times}} \\
+    \lTriple{\emptyset}{\emptymap}{\omega*\sigma}, & \text{otherwise}
+  \end{cases}
+\]
+
+This is really similar to the treatment of product constructors (\cf $\tau_{\sMkPair}$ in \cref{sec:var}), except that there is no polymorphism in regard to the product use of the call.
+
+\begin{figure}[h]
+  \centering
+  \begin{tikzpicture}
+    \begin{axis}[
+        axis lines = left,
+        ylabel=$\theta$,
+        xtick = {0,1.5,2},
+        xticklabels = {$HU$,$u$,$U$},
+        ytick = \empty,
+      ]
+      \addplot[domain=0:2, color=blue]{(x-1)^3 + 1};
+      \addplot[domain=2:2.5, color=blue]{2};
+      \addplot+[color=red, const plot mark right] coordinates {%
+        (0,0) (1.5, 1.125) (2,2)
+      };
+    \end{axis}
+  \end{tikzpicture}
+  \caption{Sketch of a usage transformer derived from a usage signature for a single incoming call use $u$.}
+  \label{fig:sigtrans}
+\end{figure}
+
+\Cref{fig:sigtrans} shows a sketch mapping a chain in $\sUse$ to one in $\sUType$ in the spirit of \cref{fig:approx}.
+In contrast to the situation for fixed-point iteration, where we start with optimistic approximations, the digested usage transformer is conservative, \eg approximates from above.
+
+\section{Solving the Data-flow Problem}\label{sec:solve}
 
 Analyses within GHC are commonly guided by the structure of the syntax tree.
 This is attractive from the point of view of simplicity:
@@ -294,7 +360,8 @@ As it turned out, we lost important structure in forgetting about monotonicity (
 
 Allocating \hsinl{FrameworkNode}s for every syntactic element enables caching of intermediate results and avoids whole chains of nodes to be recomputed when no change is detected.
 On the other hand, the bookkeeping in the iteration algorithm might outweigh any performance benefits of caching.
-Without having done any benchmarks to justify, we decided to only allocate \hsinl{FrameworkNode}s where we needed to break cycles in the data-flow graph.
+Also, memory usage becomes an issue for big graphs.
+This is why we decided to only allocate \hsinl{FrameworkNode}s where we needed to break cycles in the data-flow graph.
 Cycles arise exactly where we used the \fix operator to tie knots in \cref{sec:letrec}, thus at least we need to allocate nodes for the right-hand sides of bindings (referred to as \letdnsc nodes) and for whole \keyword{let} bindings (\letupsc nodes).
 
 Of course, just by allocating nodes the feedback cycles aren't broken yet:
@@ -318,10 +385,12 @@ Other than that, we have to allocate a node (\hsinl{root} in the example that fo
 \end{haskellcode}
 
 By passing the singleton set as the second argument, we express that the module expression is put under top use $U$.
-From there, the iteration algorithm begins to explore the data-flow graph in a depth-first fashion, which -- as we already pointed out at the begin of this section -- is crucial for termination, as the graph is infinite, while the nodes reachable from \hsinl{(root, topUse)} is finite \tod{Maybe some kind of visualisation?}.
+From there, the iteration algorithm begins to explore the data-flow graph in a depth-first fashion, which -- as we already pointed out at the begin of this section -- is crucial for termination, as the graph is infinite, while the nodes reachable from $(\hsinl{root}, U)$ is finite.
+
+This is best understood by a simple example which already exhibits quite a complex iteration order.
 
 \begin{example}
-  Consider the following example module, computing the factorial of 12:
+  Consider the following example program, printing the factorial of 12:
   \begin{haskellcode}
     module Main (main) where
 
@@ -340,18 +409,40 @@ From there, the iteration algorithm begins to explore the data-flow graph in a d
           then 1
           else n * fac (n - 1)
     in let main = print (fac 12)
-       in (main) -- This is a 1-tuple, e.g. a boxed constructor
+       in (main) -- This is a 1-tuple, \eg introduces a box
   \end{haskellcode}
 
-  \begin{figure}[h]
-    \begin{tikzpicture}
+  \Cref{fig:framework} depicts the resulting data-flow framework, or rather the finite part reachable from node $(\hsinl{root}, U)$ (again, \hsinl{root} represents the usage transformer denoting the module expression). 
 
+  \begin{figure}[h]
+    \centering
+    \begin{tikzpicture}[shorten >=1pt,x=7em,y=7em,auto]
+      \tikzset{every loop/.style={looseness=4}}
+      \tikzstyle{n}=[draw,shape=circle,minimum size=5em,inner sep=0pt]
+      \tikzstyle{root}=[n,fill=myred]
+      \tikzstyle{up}=[n,fill=myblue]
+      \tikzstyle{down}=[n,fill=mygreen]
+      \node (root) at (0,2) [root] {$(\hsinl{root}, U)$};
+      \node (let1) at (1,2) [up] {$(\keyword{let}_1, U)$};
+      \node (let2) at (2,2) [up] {$(\keyword{let}_2, U)$};
+      \node (main) at (2,1) [down] {$(\hsinl{main}, U)$};
+      \node (fac1) at (1.5,0) [down] {$(\hsinl{fac}, C^1(U))$};
+      \node (facn) at (1,1) [down] {$(\hsinl{fac}, U)$};
+      \path[->,line width=1pt] 
+        (root) edge node {} (let1)
+        (let1) edge [loop above] node {} ()
+               edge node {} (let2)
+               edge node {} (facn)
+        (let2) edge node {} (main)
+        (main) edge node {} (fac1)
+        (facn) edge node {} (fac1)
+        (fac1) edge [loop below] node {} ();
     \end{tikzpicture}
     \caption{Relevant part of the data-flow framework for the \hsinl{fac} example. The module node is drawn in red, \letupsc nodes are blue and \letdnsc nodes are green.}
     \label{fig:framework}
   \end{figure}
 
-  \Cref{fig:framework} depicts the resulting data-flow framework, or rather the finite part reachable from node $(\hsinl{root}, U)$ (again, \hsinl{root} represents the usage transformer denoting the module expression). 
+  \todo{Maybe annotate the graph with numbers for the steps we are in}
 
   The iteration algorithm will start with iterating the \hsinl{TransferFunction} of the module expression, represented by the red node, under use $U$ and then proceed in the following order:\footnote{Note that we effectively \hsinl{uncurry} our transfer function from \cref{sec:transfer}, turning something of type $\sExp \to \sUse \to \sUType$ into something of type $\sExp \times \sUse \to \sUType$. Thus, \hsinl{TransferFunction} transfers expressions into the domain of usage types instead of usage transformers (see \cref{sec:mono} on impliciations for monotonicity).}
 
@@ -427,6 +518,9 @@ From there, the iteration algorithm begins to explore the data-flow graph in a d
     \item
       The algorithm returns current stable graph as a map from nodes to results.
   \end{enumerate}
+
+  The infiniteness of the graph surfaces at the two different nodes for \hsinl{fac}:
+  Actually, there are many more of these nodes, but only the two points for $C^1(U)$ and $U$ are reachable from $(\hsinl{root}, U)$.
 
 \end{example}
 

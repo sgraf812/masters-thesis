@@ -5,7 +5,6 @@
 \usepackage[ngerman,english]{babel}     % use this if your thesis is in English -- last option specifies the default language
 
 \usepackage{tikz}
-\usetikzlibrary{positioning,calc,arrows}
 \usepackage{pgfplots}
 
 \newcommand{\thesistype}[1]{\newcommand{\thethesistype}{#1}}
@@ -133,10 +132,13 @@
 
 %%% TikZ helper %%%
 
-\usetikzlibrary{patterns}
+\usetikzlibrary{patterns,shapes,graphs,positioning,calc,arrows}
 \pgfdeclarelayer{background}
 \pgfdeclarelayer{foreground}
 \pgfsetlayers{background,main,foreground}
+\definecolor{myred}{HTML}{cc4125}
+\definecolor{mygreen}{HTML}{6aa84f}
+\definecolor{myblue}{HTML}{3d86c6}
 
 \newcommand{\tikzselect}[3][black!20]{{
   \fill[color=#1] plot[smooth cycle, tension=#2] coordinates{#3} -- cycle;
@@ -158,6 +160,7 @@
         {==>}{$\implies{}$}2
         {=>}{$\Rightarrow{}$}2
         {\\}{$\uplambda$}1
+        {topUse}{$U$}1
         {[]}{[\,]\ }1
         {++}{{$+\!\!+$}}1,
     keywords={%
