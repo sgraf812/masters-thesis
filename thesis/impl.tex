@@ -295,7 +295,7 @@ Their approach is to always interpolate the usage transformer in those three poi
 This guarantees at most one pass over an expression, disregarding fixed-point iteration.
 We can recover the same results by modifying the $\letdown{\uscore}{\uscore}$ combinator to simplify all incoming call uses to one of the three cases.
 
-Since we wanted to generalise on Call Arity, at least arbitrary call demands should be permitted (\eg bounding products mentioned in incoming call uses to depth 0).
+Since we wanted to generalise on Call Arity, at least arbitrary call demands should be permitted (\eg truncating products mentioned in incoming call uses to $U$).
 We will see the implications on compiler performance and performance of the produced artifact in \cref{sec:eval}.
 
 \section{Solving the Data-flow Problem}\label{sec:solve}
@@ -582,11 +582,11 @@ It turns out that convergence depends even on these unstable approximations to b
 
 \todo{Reproduction}
 
-\section{Other Issues}
+\section{Hacking on GHC}
 
 Working on a central part of a `real-world' compiler such as GHC was challenging in ways beyond thinking about combining two analyses on a drawing table.
 
-Usage information is critical to many other Core-to-Core passes within GHC.
+Usage information is critical to many other Core-to-Core passes within GHC\@.
 More subtle bugs require entire days of tracing through tests and thinking hard for minimal reproductions in order to better understand the problem.
 
 Many bugs hid behind module boundaries, because the code concerned with serialising usage signatures is quite scattered.
