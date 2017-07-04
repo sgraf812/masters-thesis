@@ -331,7 +331,7 @@ A less simple technique is that of caching of analysis results described in \tex
 
 All these approaches are present in every analysis within GHC (or they would benefit from them, at least) and every analysis for itself may get it wrong in a particular way, let alone the increase in cognitive complexity.
 
-Looking at compilers for imperative programming languages, data-flow problems are solved by fixed-point iteration over the control flow graph (or over a graph-based intermediate representation \parencite{firm}, \parencite{thorium}) and is broken down into two parts.
+Looking at compilers for imperative programming languages, data-flow problems are solved by fixed-point iteration over the control flow graph (or over a graph-based intermediate representation \parencite{firm}, \parencite{thorin}) and is broken down into two parts.
 
 An \emph{iteration strategy} determines which nodes in the data-flow graph are still unstable and need to be recomputed, and the order in which to do so. 
 The chosen strategy is completely opaque to the data-flow framework to solve, but severely impacts the time it takes to arrive at a stable solution.
