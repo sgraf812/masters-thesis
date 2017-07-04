@@ -49,7 +49,7 @@ As is the case for Demand Analysis and Call Arity, our usage analysis will opera
   \label{fig:core}
 \end{figure}
 
-\section{Top-level Bindings}
+\section{Top-level Bindings}\label{sec:toplvl}
 
 The code of a module in GHC Core is represented as a list of top-level definitions, some of which are exported.
 
@@ -85,7 +85,7 @@ The Demand Analyser, in contrast, goes with the conservative assumption that all
 
 The problems we faced are closely related to the problem GHC's Occurence Analyser tries to solve, but we refrained from mirroring even more unrelated logic into an already quite complex usage analysis.
 
-\section{On `Interesting' Identifiers}
+\section{On `Interesting' Identifiers}\label{sec:int}
 
 Call Arity utilises co-call graphs for its sharing analysis, which can be quite expensive, because of the inherent quadratic complexity. 
 Although the graph data structure used for co-call graphs allows for efficient insertion, constructing the adjacency set of a node is quite costly.
@@ -103,6 +103,35 @@ Because of the same challenges regarding huge constructor applications outlined 
 While the previous co-call graph data structure is well-suited for small graphs, the representation as an unreduced union of complete and complete-bipartite graphs makes edge tests require time linear in the size of the union in the worst case. 
 Let alone the unpredictable space usage, possibly exceeding quadratic complexity for the same reason.
 Paired with the requirement imposed by fixed-point iteration to efficiently check co-call graphs for equality, we chose to revise the graph data structure to be represented in a more predictable reduced form, as explained in \cref{sec:graphrep}.
+
+\section{Graph Representation}\label{sec:graphrep}
+
+\Cref{sec:int} brought up performance issues regarding the data structure used to model graphs.
+
+Call Arity necessitated an efficient way to handle either sparse or dense graphs.
+\textcite{callarity} chose to represent graphs as a simple, unreduced union of complete and complete bipartite graphs, simply because it provided the right tradeoffs for small- to medium-sized graphs.
+
+However, since we got rid of the notion `interesting' variables (\cf \cref{sec:int}), the performance issues resurfaced.
+
+The unreduced union representation has problems when the union consists of many, small graphs:
+Computing the adjacency set of a node, or even simply testing for an edge in a graph of constant size, may take time linear in the length of the union.
+Space complexity is unpredictable in the same way:
+Even for represented graphs of constant size, the size of the representation scales linearly in the length of the union.
+Uniting a graph itself results in a graph of twice the size.
+Such an operation is quite common in fixpointing, so exponential blowup is imminent.
+
+More concretely, at one point through development, space usage exceeded sixteen gigabytes for some input files, bogging down the whole development system.
+
+Hence, in order to have better guarantees about space and runtime complexity, we took inspiration in representing the common cases of sparse and dense graphs efficiently, while we made sure that edge tests were still efficient by storing the represented graph's node-indexed adjacency sets (witnessed by an isomorphism $\sGraph \simeq \sVar \to \sVar$ modulo symmetry) directly.
+
+The representation either stores the edge set of complement graph or the graph's edge set directly.
+Obviously, the former exhibits better performance characteristics for dense graphs, while the latter should be favored for sparse graphs.
+
+Edge tests have become very cheap in the new data-structure, while the complexity hides in implementing the $\llub$ and $\both$ operators, which will need to flip between representations as appropriate.
+When to flip is determined based on density of the graph:
+If above a constant threshold greater than $\nicefrac{1}{2}$, the graph representation is to be flipped.
+
+While this doesn't get rid of the potential quadratic space complexity, this tremendously helped in bringing down memory usage to more predictable figures.
 
 \section{Bounding Product Uses}\label{sec:bound}
 
@@ -199,8 +228,12 @@ The abstract specification in \cref{sec:transfer} leaves out many details a real
 The most glaring simplification is that of returning analysis results. 
 The specification describes how to interpret an expression abstractly with respect to usage, but forgets to actually announce its findings!
 
-A real implementation would thus thread an annotated expression as an additional output. 
-Our usage analysis is no different, in fact we annotate the same information as \textcite{card} does:
+A real implementation would thus thread annotations as an additional output. 
+In GHC it is common to thread the annotated expressions directly, without collecting analysis results in some kind of map first.
+This is a little unfortunate, as a map would allow to efficiently check for changed annotations.
+However, intermediate passes within GHC guarantee only that the unique keys of identifiers are unique \emph{within their scope}, so there might be clashes when merging the results of two different closed expressions.
+
+Thus, our usage analysis annotates expressions directly (this has impliciations on change detection in \cref{sec:solve}) and in fact we annotate the same information as \textcite{card} does:
 
 \begin{enumerate}
   \item When analysing lambda expressions, we mark the lambda as \emph{one-shot} if the incoming use is of the form $C^1(\uscore)$.
@@ -209,7 +242,7 @@ Our usage analysis is no different, in fact we annotate the same information as 
 
 Note that the annotations depend on the incoming use. 
 This means annotations only make sense when the use is a conservative approximation to every possible use.
-We see in \cref{sec:solve} an example where use on a call site produces too optimistic annotations, which of course are not used.
+We see in \cref{sec:solve} an example where use on a call site produces too optimistic annotations, which of course may not be used.
 
 If at one point an expression is absent (which happens only for \keyword{let} bound expression or arguments), we mark all binders in that expression as absent.
 
@@ -256,6 +289,14 @@ This is really similar to the treatment of product constructors (\cf $\tau_{\sMk
 
 \Cref{fig:sigtrans} shows a sketch mapping a chain in $\sUse$ to one in $\sUType$ in the spirit of \cref{fig:approx}.
 In contrast to the situation for fixed-point iteration, where we start with optimistic approximations, the digested usage transformer is conservative, \eg approximates from above.
+
+It also shows how our usage analysis generalises on the \letdnsc rule in \textcite{card}:
+Their approach is to always interpolate the usage transformer in those three points, even for local bindings.
+This guarantees at most one pass over an expression, disregarding fixed-point iteration.
+We can recover the same results by modifying the $\letdown{\uscore}{\uscore}$ combinator to simplify all incoming call uses to one of the three cases.
+
+Since we wanted to generalise on Call Arity, at least arbitrary call demands should be permitted (\eg bounding products mentioned in incoming call uses to depth 0).
+We will see the implications on compiler performance and performance of the produced artifact in \cref{sec:eval}.
 
 \section{Solving the Data-flow Problem}\label{sec:solve}
 
@@ -338,7 +379,7 @@ A \hsinl{DataFlowFramework} assigns to each abstract \hsinl{node} a \hsinl{Trans
 For reasons becoming clear later on, the \hsinl{ChangeDetector} is also supplied the set of referenced \hsinl{node}s that changed since the last iteration.
 
 Although we purposefully named the type variable denoting the analysis domain \hsinl{lattice}, we don't actually require it to model any kind of algebraic structure.
-This is something we come back to in \cref{sec:mono}\tod{come back to it}.
+This is something we come back to in \cref{sec:mono}.
 
 The first two type parameters of \hsinl{TransferFunction} specify in what kind of data-flow framework the function operates, while the last parameter corresponds to the return value of that \hsinl{TransferFunction}.
 Talking about what a transfer function `returns' might not make much sense just yet, but the derived \hsinl{Monad} instance hints at how this will turn out.
@@ -521,7 +562,45 @@ This is best understood by a simple example which already exhibits quite a compl
 
   The infiniteness of the graph surfaces at the two different nodes for \hsinl{fac}:
   Actually, there are many more of these nodes, but only the two points for $C^1(U)$ and $U$ are reachable from $(\hsinl{root}, U)$.
-
 \end{example}
 
-\todo{Other stuff: Where and what we annotate, Why not through Map, Coercions, imported Ids}
+\section{Monotonicity}\label{sec:mono}
+
+As we outlined in \cref{sec:letrec}, monotonicity of all involved usage transformers is essential in proving existence of the fixed-point.
+\Cref{sec:approx} pointed out that approximating usage transformers in finite time is still impossible without restricting interest to a finite set of points.
+
+This lead to a data-flow framework in \cref{sec:solve} where we modeled each single point of a usage transformer as a separate node.
+We argued that this is similar to \hsinl{uncurry}ing the transfer function in \cref{sec:transfer} from $\sExp \to \sUTrans \equiv \sExp \to \sUse \to \sUType$ to $\sExp \times \sUse \to \sUType$.
+The problem with doing so is that it doesn't preserve the monotonicity of denoting usage transformers.
+
+To be more precise, the transfer function is more accurately described by the type $\sExp \to (\sUse \mto \sUTrans)$, where $\mto$ denotes a monotone map.
+
+Where does this bite?
+Well, we relied on monotonicity in our argument for proving existence of the fixed-point.
+Of course, \hsinl{uncurry}ing didn't change the actual semantics, but modeling each point separately means that prior to reaching the fixed-point, there are unstable intermediate approximations which are not monotone.
+It turns out that convergence depends even on these unstable approximations to be monotone, because there are expressions which diverge otherwise:
+
+\todo{Reproduction}
+
+\section{Other Issues}
+
+Working on a central part of a `real-world' compiler such as GHC was challenging in ways beyond thinking about combining two analyses on a drawing table.
+
+Usage information is critical to many other Core-to-Core passes within GHC.
+More subtle bugs require entire days of tracing through tests and thinking hard for minimal reproductions in order to better understand the problem.
+
+Many bugs hid behind module boundaries, because the code concerned with serialising usage signatures is quite scattered.
+Some identifiers, such as dictionary selectors, primitive operators and runtime errors, get special treatment by GHC, the places at which this happens were discovered in a number of successive debugging sessions.
+
+Not-so-absent thunks which the analysis identified as absent lead to crashes at runtime, only more informative than a segfault in that the message mentions absence as a reason.
+
+So it came that the most gnarly class of bugs manifested themselves as absent errors which only popped up across module boundaries, involving type class instances referencing absent thunks.
+It took quite some time and head-scratching to nail down rewrite rules as the culprit, which had to be regarded as reachability roots as explained in \cref{sec:toplvl}.
+
+GHC's build system was another thing that took some time to get accustomed to.
+Especially figuring out which things needed to be rebuilt after some change and what various build settings did, took a lot of trial and error.
+Sometimes even a \texttt{make clean} wouldn't get rid of some clearly build system-related issues, leaving no choice but to do a complete fresh checkout.
+Experiences like the latter don't exactly strengthen confidence in the build system, so we look forward to see \texttt{hadrian}\footnote{\url{https://github.com/snowleopard/hadrian}} succeed.
+
+Lastly, the test and benchmark suites of GHC are quite essential in immediately crushing occasional hopes after having fixed a complicated bug by immediately confronting the developer with another regression.
+Of course, this is a good thing for both the maturity of GHC as well as a humbling experience for the soul.
