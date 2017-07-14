@@ -1096,7 +1096,7 @@ Call Arity annotates every \keyword{let}-binder with this \emph{call arity}, the
 
 A pair $(n, \alpha)$ of call multiplicity $n$ and minimum arity $\alpha$ is accurately represented as a $\sUsage$ of $n*C^n(\underbrace{C^1(\ldots C^1(U) \ldots)}_{\alpha-1 \text{~times}})$.
 
-Call arity -- or, expanded arity based on usage -- can be recovered from identifier usage and the results of an arity analysis via the following function:
+Call arity -- or, expanded arity based on usage -- can be recovered from identifier usage and the results of an arity analysis via the following pair of mutual recursive functions:
 \[
   \begin{array}{lcl}
     \expand_{\sUsage}                              &\,\colon& \sUsage \to \mathbb{N} \to \mathbb{N} \\
@@ -1107,7 +1107,7 @@ Call arity -- or, expanded arity based on usage -- can be recovered from identif
     \expand_{\sUse}                                &\,\colon& \sUse \to \mathbb{N} \to \mathbb{N} \\
     \expand_{\sUse}\,HU\,\alpha                    &    =   & \alpha \\
     \expand_{\sUse}\,C^\omega(u)\,0                &    =   & 0 \\
-    \expand_{\sUse}\,C^{\uscore}(u)\,\alpha        &    =   & 1 + \expand_{\sUse}\,u\,(\max\,0\,(\alpha - 1)) \\
+    \expand_{\sUse}\,C^{\uscore}(u)\,\alpha        &    =   & 1 + \expand_{\sUsage}\,u\,(\max\,0\,(\alpha - 1)) \\
     \expand_{\sUse}\,\uscore\,\alpha               &    =   & \alpha \\
   \end{array}
 \]

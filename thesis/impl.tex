@@ -1,6 +1,7 @@
 \chapter{Implementation}\label{sec:impl}
 
 This chapter is concerned with the implementation of a usage analysis as specified in \cref{sec:spec} within the Glasgow Haskell Compiler (GHC).
+Changes are scattered over a huge number of files, so the \cref{app:code} only lists the main analysis \texttt{compiler/simplCore/UsageAnalysis/Analysis.hs}, which is a fork of the subsumed Call Arity analysis.
 
 A detailed walkthrough of the Haskell code is out of scope and would not be particularly interesting, so we will instead discuss design decisions and interesting problems we encountered.
 
