@@ -20,47 +20,86 @@ A GHC 8.2.1 release candidate, revision \texttt{83a6dd8}, serves as a baseline. 
     This variant discards any product use at call sites. 
     E.g., $C^1(U(1*U,A))$ will be truncated to $C^1(U)$. 
     This is so that less nodes in the data-flow framework are accessed, to save space and time.
+    Results should still show an improvement compared to the baseline.
   \item[\varedges]
     In addition to the changes of \varcalls, replace the co-call graph by a structure which only tracks self-edges and conservatively assumes the existence of all other co-call edges.
-    The intention is to measure if the worst case quadratic space usage of co-call graphs matters in practice.
-    Note that regressions in some cases are expected, as the baseline employs Call Arity with accurate modelling of edges in co-call graphs at least between `interesting' variables.
+    The intention is to measure if the worst case quadratic complexity induced by co-call graphs matters in practice.
+    Note that regressions in some cases are expected, as the baseline employs Call Arity with accurate modelling of edges in co-call graphs at least between `interesting' variables \parencite[section~3.4.1]{callarity}.
 \end{enumerate}
 
-Ein Beispiel ist in \cref{tbl:nofib} zu sehen.
+\Cref{tbl:nofib} shows the results of running nofib.
+The total impact of our rather complex analysis is rather meager, with only a reduction of 0.1\% in the geometric mean over all benchmarks.
+But recalling the goal of this thesis, namely unifying both Call Arity \parencite{callarity} and Cardinality Analysis \parencite{card} into a single analysis, this is good news and asserts our claims in \cref{sec:generalise}!\smallskip
+
+All variants exhibit the major positive outliers in \texttt{fft2}, \texttt{fluid} and \texttt{queens}.
+To understand what happens for \texttt{fft2}, consider the following program:
+\begin{haskellcode}
+  module Main (main) where
+
+  p x = ...
+
+  c x y = 
+    if p x 
+    then \z -> y 
+    else \z -> c y z
+  
+  f x = 
+    if p x 
+    then c x (f (x - 1))
+    else \z -> x
+
+  main = 
+    print (f 1 2)
+\end{haskellcode}
+
+Our analysis finds out that \hsinl{f} can be $\eta$-expanded to arity 2.
+Neither Call Arity nor Cardinality Analysis recognises this.
+
+Call Arity doesn't have any mechanism similar to usage signatures, so it assumes a conservative call arity of 1 for \hsinl{f} because of the call \hsinl{c x (f (x - 1))}.
+
+Cardinality Analysis, on the other hand, has available only the usage signature for manifest arity 2, which is too conservative and unleashes a usage of $1*U$ on \hsinl{f (x - 1)} instead of $1*C^1(U)$.
+
+Our analysis infers from the call to \hsinl{c} with incoming arity 3 a call use of $C^1(U)$ for \hsinl{f (x - 1)}, exposing \hsinl{f} to a total usage of $C^\omega(C^1(U))$, which we can leverage through arity expansion to arity 2.
+Something similar happens in \texttt{fft2} within the function \hsinl{dfth}, enabling additional inlining and other transformations. \smallskip
+
+As expected, variant \varfull does not cause regressions in allocations, except for \texttt{infer}, where a partial application (which is regarded cheap to duplicate by GHC) is $\eta$-expanded and inlined subsequently.
+\tod{Discuss \varcalls when the results are there.}
+Even the most approximate variant evaluated, \varedges, still yields a negligible improvement overall, but gets rid of the potential quadratic blowup of co-call graphs.
 
 \begin{figure}[hb]
 \begin{center}
-\begin{tabular}{lrrr}
-  \toprule
-          & \multicolumn{3}{c}{Bytes allocated} \\
-            \cmidrule(lr){2-4}
-  Program & \multicolumn{1}{c}{\varfull} & \multicolumn{1}{c}{\varcalls} & \multicolumn{1}{c}{\varedges} \\
-  \midrule
-  ansi & -0.5\% & +0.3\% & +0.1\%\\
-  awards & -0.2\% & +0.1\% & +0.0\%\\
-  expert & -0.2\% & +0.2\% & +0.1\%\\
-  fft2 & -2.2\% & -2.2\% & -2.2\%\\
-  fluid & -1.5\% & -1.5\% & -1.5\%\\
-  grep & -0.6\% & +0.5\% & +0.2\%\\
-  infer & +0.0\% & +0.0\% & +0.0\%\\
-  n-body & -0.5\% & +0.0\% & -0.1\%\\
-  queens & -0.7\% & -0.7\% & -0.7\%\\
-  rfib & -0.5\% & +0.3\% & +0.1\%\\
-  scc & -0.3\% &  0.0\% & -0.3\%\\
-  spectral-norm & -0.3\% & +0.1\% & -0.0\%\\
-  tak & -0.7\% & +0.1\% & -0.1\%\\
-  x2n1 & -0.2\% & +0.1\% & +0.0\%\\
-  \midrule
-  Min & -2.2\% & -2.2\% & -2.2\%\\
-  Max & +0.0\% & +0.5\% & +0.2\%\\
-  Geometric Mean & -0.1\% & -0.0\% & -0.0\%\\
-  \bottomrule
-\end{tabular}
+  \begin{tabular}{lrrr}
+    \toprule
+            & \multicolumn{3}{c}{Bytes allocated} \\
+              \cmidrule(lr){2-4}
+    Program & \multicolumn{1}{c}{\varfull} & \multicolumn{1}{c}{\varcalls} & \multicolumn{1}{c}{\varedges} \\
+    \midrule
+    ansi & -0.5\% & +0.3\% & +0.1\%\\
+    awards & -0.2\% & +0.1\% & +0.0\%\\
+    expert & -0.2\% & +0.2\% & +0.1\%\\
+    fft2 & -2.2\% & -2.2\% & -2.2\%\\
+    fluid & -1.5\% & -1.5\% & -1.5\%\\
+    grep & -0.6\% & +0.5\% & +0.2\%\\
+    infer & +0.0\% & +0.0\% & +0.0\%\\
+    n-body & -0.5\% & +0.0\% & -0.1\%\\
+    queens & -0.7\% & -0.7\% & -0.7\%\\
+    rfib & -0.5\% & +0.3\% & +0.1\%\\
+    scc & -0.3\% &  0.0\% & -0.3\%\\
+    spectral-norm & -0.3\% & +0.1\% & -0.0\%\\
+    tak & -0.7\% & +0.1\% & -0.1\%\\
+    x2n1 & -0.2\% & +0.1\% & +0.0\%\\
+    \emph{... and 90 more} \\
+    \midrule
+    Min & -2.2\% & -2.2\% & -2.2\%\\
+    Max & +0.0\% & +0.5\% & +0.2\%\\
+    Geometric Mean & -0.1\% & -0.0\% & -0.0\%\\
+    \bottomrule
+  \end{tabular}
 \end{center}
 \caption{
-  Benchmark results of running nofib. 
+  Benchmark results of running nofib where the savings in allocations were greater than 0.1\% or where allocations got worse.
   A GHC 8.2.1 release candidate on which all work is based was used as a baseline.
-  Variants \varfull to \varedges are increasingly approximate, but theoretically speaking, only \varedges may possibly yield worse results than the current combination of Call Arity and Demand Analysis.
+  Variants \varfull to \varedges are increasingly approximate, but theoretically speaking, only \varedges may possibly yield worse results than the baseline's combination of Call Arity and Demand Analysis.
 }
 \label{tbl:nofib}
 \end{figure}
