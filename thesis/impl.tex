@@ -154,6 +154,9 @@ Approximation of the usage transformer of \hsinl{triple} will begin with $\bot$.
 We currently bound the depth of product uses to 10, which is quite arbitrary. 
 Termination time, however, is affected exponentially by the cut-off depth.
 
+Foreshadowing the graph-based data-flow iteration approach in \cref{sec:solve}, another approach worth considering would be a cut-off based on iteration state.
+Instead of bounding product uses, we could track the number of different uses under which the same expression was analysed (\eg the number of stable points in which we already approximate the usage transformer) and return conservative results for when a threshold is exceeded.
+
 \section{Approximating Usage Transformers}\label{sec:approx}
 
 As we saw in \cref{sec:fix}, all denoting usage transformers are monotone, which is a necessary condition for termination of the analysis.
@@ -564,6 +567,16 @@ This is best understood by a simple example which already exhibits quite a compl
   The infiniteness of the graph surfaces at the two different nodes for \hsinl{fac}:
   Actually, there are many more of these nodes, but only the two points for $C^1(U)$ and $U$ are reachable from $(\hsinl{root}, U)$.
 \end{example}
+
+\textcite[section~3.6.6]{callarity} anticipates the connection of the ad-hoc analyses in GHC to data-flow problems and the possibility of a uniform solution procedure through iterating data-flow frameworks.
+This work, in particular the \texttt{utils/Worklist.hs} module, solidifies these findings and provides a rather elegant embedded domain-specific language for constructing such frameworks.
+Eventually, we plan to release this module as a separate package on Hackage, after it has gone through some polishing.
+
+In a distant future, we could see becoming this kind of graph-based data-flow iteration more feasible by associating a \hsinl{FrameworkNode} with each \hsinl{CoreExpr} constructor (or rather each subexpression) to begin with.
+This would get rid of the extra book-keeping required to assign good priorities to nodes through the \hsinl{FrameworkBuilder} code, which is actually inessential to the analysis and mostly contained in \hsinl{buildAnalFramework} in \texttt{simplCore/UsageAnal/Analysis.hs}.
+
+An optimisation worth implementing would be to take advantage of the boundedness of allocated \hsinl{FrameworkNode}s, through which the graph data-structure admits a mapping to a plain \hsinl{STVector}.
+Using lazy functional state threads \parencite{statethreads}, this would achieve constant time lookup and update at least for whole usage transformers.
 
 \section{Monotonicity}\label{sec:mono}
 
