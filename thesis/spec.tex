@@ -265,9 +265,10 @@ The co-call graph for the \hsinl{if} expression crucially \emph{does not} contai
 Knowing that \hsinl{x} is not forced together with \hsinl{y}\footnote{Prior to looking at the right-hand side of \hsinl{y} is, of course.}, we save a self-edge on \hsinl{x} after analysing the right-hand side of \hsinl{y}.
 
 Consequently, \hsinl{x} is recognized of only being evaluated once. 
-Other usage analyses like that of GHC's Cardinality Analysis \parencite{card} only model self-loops in the underlying co-call structure (\eg usage multiplicity), so they would fail to recognize the absent edge between \hsinl{x} and \hsinl{y} and conservatively assume \hsinl{x} to be called more than once.
+Other usage analyses like that of GHC's Cardinality Analysis \parencite{card} only model self-loops in the underlying co-call structure (\eg usage multiplicity), so they would fail to recognize the absent edge between \hsinl{x} and \hsinl{y} and conservatively assume \hsinl{x} to be called more than once\footnote{It is worth pointing out that this is only the case for when \hsinl{y} is a thunk (\eg not in WHNF), as this imprecision pertains to the \letupsc rule of \textcite{card}. We
+discuss this in more detail in \cref{sec:let}.}.
 
-\todo{Mention that this only happens for thunks, or refer to where this is written, \eg \cref{sec:let}}
+It is worth pointing out that \textcite{card} recovers most of the lost precision by employing a different strategy for unleashing \hsinl{let} bindings, 
 
 We enrich the \emph{usage types} of GHC's Cardinality Analysis \parencite{card} with co-call graphs in order to generalise both (c.f. \cref{sec:generalise}).
 
@@ -467,6 +468,10 @@ The answer to that question bears $\both$ (pronounced 'both') in \cref{fig:both}
 
 Both calls to \hsinl{f} in \hsinl{f 0 0 + f 0 0}, for example, would result in a usage type of $\lTriple{\emptyset}{\maplit{f}{C^1(C^1(U))}}{\top}$. 
 Sequential composition with itself would then yield the expected $\lTriple{\left\{(f,f)\right\}}{\maplit{f}{C^\omega(C^1(U))}}{\top}$.
+
+Sequential composition of usage types deserves special mention with respect to co-call graphs.
+The sequential composition of co-call graphs is basically the union of both graphs, plus the complete bipartite graph between their domains.
+Using proper graph theoretic language, this is exactly the \emph{graph join} of the two graphs, but we will refrain from calling it that way in order to not confuse it with the order theoretic least upper bound operator $\llub$ from \cref{sec:lattice} which corresponds to the \emph{graph union}.
 
 We also extend the multiplicity notation of usages to usage types to mean exactly this notion of sequential composition with itself:
 \begin{alignat*}{1}
@@ -749,8 +754,6 @@ This makes sense: The way the transformers in $\rho$ are unleashed in the variab
 Equipped with the extended transformer environment $\rho'$, we can proceed to analyse the body $e$. 
 We put its denotation under the incoming use $u$ and observe a usage type $\theta$.
 
-\todo{Mention where an implementation would annotate stuff and that we would update the syntax tree with the final \letupsc{} run over the bound expression}
-
 This usage type has information about which usage $x_1$ was exposed to in the body, expressed as $\theta(x_1)$. 
 Broadly speaking, $\theta_1$ is the result of putting the bound expression, denoted by $\tau_1$, under this usage for a \letupsc{}-like treatment.
 
@@ -810,8 +813,6 @@ We see in a minute an example that clears things up, but let us first have a loo
     \gamma &{}={}&& \gamma' \llub \gamma_i \llub (N \times \dom{\varphi_i}) \\
     \varphi &{}={}&& \varphi' \llub \varphi_i \llub (\restrict{\varphi'}{N}\both \varphi_i)
 \end{alignat*}
-
-\todo{Think about formatting this better}
 
 Apart from recursing over the entire finite map in the second parameter (which makes it a well-defined function), it works very much like the sequential composition operator $\both$ on usage types from \cref{sec:both}.
 
@@ -964,6 +965,39 @@ The substitution operator is strongly related to \emph{composition graphs} $G_0[
   This exemplifies that in the case of functions, \letdnsc{} is as precise as \letupsc{} with co-call graphs.
 \end{example}
 
+\begin{example}
+  We even found a minimal counter-example where \letupsc{} with co-call graphs yields worse results than an approach based on \letdnsc{}.
+
+  Let's investigate the following definitions:
+  \begin{haskellcode}
+    let f = 
+          if expensive
+          then id
+          else (*2)
+    in let x = f 0
+       in if b
+          then f `seq` x
+          else f 0
+  \end{haskellcode}
+
+  The expression bound to \hsinl{x} is a thunk, so the binding is unleashed \letupsc-style.
+
+  Knowing that the usage signature of \hsinl{seq} is $1*HU \to 1*U \to \top$, the usage type of the inner-most \hsinl{if} expression is
+  \[
+    \lTriple{\edge{f}{x}}{\left[f\mapsto C^1(U), x\mapsto U\right]}{\top}
+  \]
+
+  Notice how there is a co-call edge from \hsinl{f} to \hsinl{x} due to the \hsinl{then} branch, but also that \hsinl{f} exposed to usage $1*C^1(U)$ because of the \hsinl{else} branch.
+  Substituting the usage type of its bound expression for \hsinl{x} will then expose \hsinl{f} to usage $\omega*C^\omega(U) = \omega*U$ because of the existing co-call edge.
+
+  That's clearly imprecise: \hsinl{f} is only ever called once, even if in the \hsinl{then} branch it is brought to WHNF (\eg put under head use $HU$) and then called by evaluation of \hsinl{x}, resulting in a usage of $\omega*C^1(U)$.
+  
+  Indeed, that is what we would find out if we unleashed \hsinl{x} \letdnsc-style. 
+  As should be clear by now, we don't do this because in general there might be multiple calls to \hsinl{x} and the work of bringing down its bound expression to WHNF is shared.
+
+  A similar scenario can be elicited by using pair uses instead of call uses.
+\end{example}
+
 \subsection{Recursive Let}\label{sec:letrec}
 
 \Cref{sec:let} was dedicated to explaining analysis of \keyword{let} bindings in great detail. 
@@ -1043,7 +1077,7 @@ Scott-continuity implies monotonicity, but it is not obvious how $\up$ and $\dow
 Because the $\up$ function looks up identifier usage from the usage type, monotonicity requires that a stronger usage leads to a stronger usage type unleashed by the bound expression.
 
 In other words: Monotonicity of $\up$ implies that the transfer function ranges only over \emph{monotone} usage transformers, adding to the pile of proof work to do. 
-In fact, termination bugs regarding monotonicity actually occured while realising the implementation due to the chosen data structures (\cf \tod{impl}).
+In fact, termination bugs regarding monotonicity actually occured while realising the implementation due to the chosen data structures (\cf \cref{sec:mono}).
 
 The proof for Scott-continuity of $\up$ would follow a similar argument, so we also need to prove continuity of all usage transformers in the image of the transfer function.
 
@@ -1073,6 +1107,8 @@ Otherwise, there is always a chain of usage transformers that ascend at arbitrar
 
 Of course, just showing termination does not make any guarantees with respect to runtime complexity. 
 \Cref{sec:approx} discusses efficient approximation of usage transformers in more detail.
+
+Also, we don't even attempt a proof of safety in the style of \textcite{card} or even \textcite{callarity} and trust in benchmark results (\cf \cref{sec:eval}) to have uncovered possible problems.
 
 \section{Relationship to Call Arity and Demand Analysis}\label{sec:generalise}
 
@@ -1134,11 +1170,11 @@ Other than that, we improve on Call Arity in a number of ways:
 
 \begin{description}
   \item[Usage signatures] The mixed \letdnsc/\letupsc style allows us to unleash usage signatures at call sites for higher-order information, where Call Arity effectively assumes a usage signature of $\top$.
-  \item[Pair uses] Propagating pair use allows better usage information for functions wrapped in the pair constructor.
+  \item[Pair uses] Propagating pair use allows better usage information for functions wrapped in the pair constructor. This is a common scenario for type class dictionaries.
   \item[Call uses] Call uses capture more precisely the analysis information of Call Arity without having to interleave an arity analysis with co-call analysis. Also, there is less of a split between handling thunks and functions.
 \end{description}
 
-\todo{Refer to implementation and/or evaluation chapter}
+As witnessed by the benchmark results in \cref{sec:eval}, our usage analysis yields no results worse than Call Arity, which is rather the point of this thesis.
 
 \subsection{Recovering Demand Analysis}
 
@@ -1159,7 +1195,7 @@ That said, we generalise Cardinality Analysis in several aspects:
   \item[Ideal specification] The transfer function serving as a specification captures the essence of the analysis without leaking any implementation details, such as how approximate the usage transformers unleashed through \letdnsc are. Of course, when writing a conference paper, there are good reasons not to do so.
 \end{description}
 
-We will revisit the issues of how approximate we want usage transformers to be in \tod{finite approximation of usage transformers}.
+We will revisit the issues of how approximate we want usage transformers to be in \cref{sec:approx}.
 
 Specifically, we recover Cardinality Analysis by forgetting information and being more approximate in the \letdnsc case, so that a single analysis pass over the bound expression is enough.
 

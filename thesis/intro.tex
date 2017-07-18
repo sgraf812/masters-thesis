@@ -1,9 +1,21 @@
-\chapter{Einführung}\label{sec:intro}
+\chapter{Introduction}\label{sec:intro}
 
-In diesem Kapitel wird das Problem vorgestellt, das diese Arbeit löst.
-Es sollte verständlich sein (anschauliches Beispiel?).
-Das Problem sollte wichtig sein,
-denn das motiviert weiterzulesen.
+High-level programming languages abstract from operational details so that the programmer can focus on solving problems instead of fighting with the concrete hardware the solution is supposed to run on.
 
-Bestenfalls ist dieses Kapitel auch für Laien verständlich.
+Haskell, being a non-strict functional programming language, is an extreme example of this, going well beyond common features such as garbage collection.
+Rather than encoding a program as an imperative sequence of commands to execute, programs are specified declaratively as a pure expression to evaluate.
+
+Non-strictness demands that evaluation is driven entirely by the need to make progress in evaluating this top-level expression.
+The call-by-need evaluation strategy employed by implementing compilers such as the Glasgow Haskell Compiler (GHC) guarantees that no expression is (observably) evaluated that is not needed over the course of executing the program!
+
+This most immediately affects programmers in freeing them from thinking long and hard whether some definition should be floated nearer to its use site, to avoid unnecessary evaluation.
+But laziness also provides huge benefits when it comes to composibility:
+In Haskell, \hsinl{take k . sort} exhibits the same asymptotics as a Top-N query implemented directly\footnote{With a selection algorithm based on the sorting algorithm used to implement \hsinl{sort}, that is.}. 
+Strict programming languages usually provide additional functions for handling these important cases, expecting the library designer to anticipate different user scenarios.
+In short, laziness allows to compose small bits of functionality into bigger programs, without paying in asymptotic complexity.
+
+Some purely functional data structures even benefit from laziness in a logarithmic factor, bringing persistent data structures on par with their mutable counterparts.
+As \textcite{pippenger} and \textcite{bird} show, this is not always possible in a purely functional setting without laziness.
+
+As with most high-level abstractions, lazy evaluation is not free, however.
 
