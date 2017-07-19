@@ -2,20 +2,75 @@
 
 High-level programming languages abstract from operational details so that the programmer can focus on solving problems instead of fighting with the concrete hardware the solution is supposed to run on.
 
-Haskell, being a non-strict functional programming language, is an extreme example of this, going well beyond common features such as garbage collection.
+Haskell, being a non-strict purely functional programming language, is an extreme example of this, going well beyond established language features such as garbage collection.
 Rather than encoding a program as an imperative sequence of commands to execute, programs are specified declaratively as a pure expression to evaluate.
 
-Non-strictness demands that evaluation is driven entirely by the need to make progress in evaluating this top-level expression.
-The call-by-need evaluation strategy employed by implementing compilers such as the Glasgow Haskell Compiler (GHC) guarantees that no expression is (observably) evaluated that is not needed over the course of executing the program!
+While the programmer benefits from laziness and purity in various ways, the compiler must be equipped to optimise away entire layers of abstraction to produce programs with reasonable performance.
+On the other hand, high-level constructs such as laziness and purity enable better reasoning about programs also for compilers, which in turn can do a much better job at optimising.
 
-This most immediately affects programmers in freeing them from thinking long and hard whether some definition should be floated nearer to its use site, to avoid unnecessary evaluation.
-But laziness also provides huge benefits when it comes to composibility:
-In Haskell, \hsinl{take k . sort} exhibits the same asymptotics as a Top-N query implemented directly\footnote{With a selection algorithm based on the sorting algorithm used to implement \hsinl{sort}, that is.}. 
-Strict programming languages usually provide additional functions for handling these important cases, expecting the library designer to anticipate different user scenarios.
-In short, laziness allows to compose small bits of functionality into bigger programs, without paying in asymptotic complexity.
+The Glasgow Haskell Compiler (GHC) is a particularly miraculous implementation of Haskell, producing artifacts which perform within the same order of magnitude as hand-tuned C code.
 
-Some purely functional data structures even benefit from laziness in a logarithmic factor, bringing persistent data structures on par with their mutable counterparts.
-As \textcite{pippenger} and \textcite{bird} show, this is not always possible in a purely functional setting without laziness.
+As a compiler becomes more mature, it aggregates a growing number of complicated analyses and transformations, some of which overlap and interact in non-trivial ways.
+Although GHC started out as an academic project to push the boundaries of what `high-level' means, after more than 25 years of development and more than 100.000 lines of code it has also become a challenge in terms of software engineering.
 
-As with most high-level abstractions, lazy evaluation is not free, however.
+Hence, principles such as separation of concerns and `Don't repeat yourself' (DRY) also apply to writing compilers.
+Also, as the number of users and language extensions grows, compiler performance has been an increasing woe.
 
+GHC 7.10 shipped with two new analyses that share interesting ideas: 
+There's Call Arity \parencite{callarity}, the result of Joachim Breitner's dissertation, and a new Higher-order Cardinality Analysis \parencite{card} which integrates with the existing Demand Analyser.
+Call Arity tries to $\eta$-expand bindings based on usage information in order to make \hsinl{foldl} a good consumer for list fusion, whereas Cardinality Analysis (referring to the contributions of \parencite{card}) is concerned with identifying single-entry thunks and one-shot lambdas.
+
+It is not safe in general to $\eta$-expand thunks, as it possibly duplicates otherwise shared work. 
+All is not lost however: It is always safe to $\eta$-expand single-entry thunks to the minimum arity of all possible calls.
+Thus, in order for Call Arity to justify $\eta$-expansion of thunks, it has to interleave with the arity analysis its own sharing analysis based on co-call graphs \parencite{callarity} to identify said single-entry thunks.
+
+In a perfect world, we would just integrate Call Arity's co-call graphs into Cardinality Analysis and have Call Arity access the analysis results, even if it only was for concentrating the analysis logic in one place (adhering to DRY).
+Yet there are quite a number of problems that need to be solved over the course of this thesis before we provide a unified analysis in \cref{sec:spec}:
+\begin{description}
+  \item[Complexity] 
+    Call Arity currently interleaves the co-call analysis with its own arity analysis.
+    Information flows both ways, so it seems that the Demand Analyser will additionally have to integrate an arity analysis.
+    Considering the complexity of the current implementation at the time of this writing (GHC 8.2) this is hardly possible.
+    Needless to say that GHC already integrates an arity analysis in the form of \texttt{CoreArity.hs}.
+  \item[Let bindings]
+    Cardinality Analysis employs different analysis orders for \hsinl{let} bindings, depending on whether the bound expression is a thunk (\letupsc) or not (\letdnsc).
+    The arity analysis within Call Arity relies on the fact that all calls to a binding are analysed before the bound expression is analysed to find the minimum arity of all calls.
+    This corresponds to the \letupsc rule in Cardinality Analysis and it is not immediate if at all and how these analysis orders can be combined.
+  \item[Data structures]
+    Although there is some overlap in language when talking about $\eta$-expansion of single-entry thunks, it is not obvious how information from Cardinality Analysis is to be translated into a format suitable for Call Arity and vice versa.
+\end{description}
+
+\section{Contributions}\label{sec:contrib}
+
+We present a usage analysis that generalises both Cardinality Analysis \parencite{card} and Call Arity \parencite{callarity}.
+
+\todo{Any stuff that was added after I wrote this}
+
+A formal specification of the analysis in terms of a simplified object language is given in \cref{sec:spec}.
+The analysis works by abstract interpretation over a domain quite similar to that of \textcite{card}, outlined in \cref{sec:dom}.
+In \cref{sec:transfer} follows the definition of the transfer function, while we discuss how to recover Call Arity (\eg $\eta$-expansion based on usage) and Cardinality Analysis in \cref{sec:generalise}.
+
+\Cref{sec:impl} discusses challenges solved while implementing the analysis within a GHC 8.2 release candidate.
+Of special note are our insights on solving the graph-based data-flow problem in \cref{sec:solve} and our insights on approximating usage transformers in \cref{sec:approx}.
+
+We discuss benchmark results in \cref{sec:eval}.
+As the goal of this thesis was to merge both analyses, improvements in benchmarks are quite secondary and serve more as a safety check for the analysis.
+More critical, we discuss regressions in compiler performance.
+
+Regarding the aforementioned list of problems:
+\begin{description}
+  \item[Complexity]
+    It turned out that through adopting the language of Cardinality Analysis to describe analysis results of Call Arity (\cf \cref{sec:generalise}), we could leverage the pre-existing arity analysis to handle (the bulk of) $\eta$-expansion for us.
+    We also integrated co-call graphs into the analysis and measured their impact on analysis results and performance in \cref{sec:eval}.
+    Integrating the analysis directly with the Demand Analyser was considered at first, but quickly rejected because of far reaching consequences of what would have happened to be a rewrite.
+    We also advocate that this was for the better from a perspective of separation of concerns as outlined in \tod{Write about untangling Demand Analyser}.
+  \item[Let bindings]
+    Current analyses within GHC perform fixed-point iteration directly along the syntactic structure of the expression to analyse.
+    Effectively, every analysis defines its own data-flow iteration algorithm, interleaved with actual analysis logic.
+    Driven by the problems described in \cref{sec:solve} we propose a novel, graph-based iteration method that separates denoting the transfer function to syntactic elements from actually computing the fixed-point of the modelled data-flow problem.
+    In doing so, we can improve precision of analysis information unleashed at call sites, approximating a polyvariadic analysis.
+    We also elaborate on the Pros and Cons of \letupsc vs \letdnsc in \textcite{card} and prove that, if it wasn't for losing shared work, \letdnsc is strictly more precise than \letupsc even in the presence of co-call graphs at the end of \cref{sec:let}.
+  \item[Data structures]
+    We realised that the analysis information Call Arity provides can be recovered by doing arity expansion based on usage information as explained in \cref{sec:generalise}.
+    This allowed us to get rid of the interleaving of arity und sharing analysis within Call Arity, which finally led to full generalisation of both analyses.
+\end{description}
