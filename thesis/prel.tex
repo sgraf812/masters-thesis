@@ -278,6 +278,7 @@ It is a product lattice of strictness and usage information (\eg lower and upper
 
 We focus on the usage analysis (Cardinality Analysis) here, which aims to identify single-entry thunks, one-shot lambdas and absent bindings \parencite[section~2]{card} for the reasons we explained in \cref{sec:card}.
 They achieve remarkable precision by a number of interesting features, which describe not only the maximum cardinality of a binding, but also \emph{how} a syntactic thing was used.
+We borrow the same language for our usage analysis, so the curious reader can refer to \cref{sec:dom} for a formal definition.
 
 \subsubsection{Call Uses}
 

@@ -424,6 +424,7 @@ That is why \hsinl{ChangeDetector}s are supplied the set of changed references:
 Apart from checking usage types for changes, it checks if the only reference that changed was the node itself.
 
 Other than that, we have to allocate a node (\hsinl{root} in the example that follows) for the module expression to have a way to refer to it and then kick off iteration with a call to \hsinl{runFramework} like the following:
+
 \begin{haskellcode}
   result :: Map (FrameworkNode, Use) (UsageType, CoreExpr)
   result = runFramework framework (Set.singleton (root, topUse))
@@ -436,6 +437,7 @@ This is best understood by a simple example which already exhibits quite a compl
 
 \begin{example}
   Consider the following example program, printing the factorial of 12:
+
   \begin{haskellcode}
     module Main (main) where
 
@@ -448,6 +450,7 @@ This is best understood by a simple example which already exhibits quite a compl
   \end{haskellcode}
 
   This will be translated to the following module expression:
+
   \begin{haskellcode}
     let fac n =
           if n <= 1
