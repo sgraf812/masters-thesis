@@ -18,7 +18,7 @@ echo "Copying /ghc to $1"
 cp -r /ghc $1
 cd $1
 echo "Patching using /patches/$1.patch"
-patch -p1 < /patches/$1.patch
+patch -p1 < /patches/$1.patch || true
 echo "Running nofib"
-/run-nofib.sh
+/scripts/run-nofib.sh
 

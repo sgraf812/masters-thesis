@@ -39,7 +39,8 @@ echo ready to go...
 if [ "$clean" = yes ]
 then
 	make distclean
-	perl boot
+	echo "BuildFlavour = bench" | cat - mk/build.mk.sample > mk/build.mk
+    perl boot
 	./configure $cachegrindconf
 	/usr/bin/time -o buildtime-$name make 2>&1 |
 		tee /logs/buildlog-$patch-$name.log
