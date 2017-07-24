@@ -99,10 +99,11 @@ Both \emph{absence analysis} (\eg, is $\beta$ in the cardinality annotation $[\a
 
 The results of a sharing analysis support the call-by-name optimisation from above, while absence information is needed together with strictness information for the worker/wrapper transform.
 
-As \textcite[section~2.4]{verstoep} points out, a sharing analysis finds out similar results as a \emph{uniqueness analysis}.
+As \textcite[section~2.4]{verstoep} points out, a sharing analysis finds out similar results as a static analysis based on \emph{uniqueness types}.
 They serve different purposes, however; Uniqueness information is propagated during type-checking and may affect which programs are rejected, while sharing analysis is an enabling analysis for other optimisations in the middleend.
 
 That also means that the benefits of uniqueness types might carry over to thunks that a sharing analysis finds to be single-entry, just by changing their type after it passed type-checking.
+\textcite{sharing} give an overview over commonalities and differences of sharing analyses and uniqueness types and provide an analysis generalising both.
 
 Less far-fetched is the benefit of identifying \emph{one-shot} lambdas.
 Roughly speaking, a lambda is one-shot if a single evaluation of the expression that reduces to the lambda leads to at most one call of the lambda.

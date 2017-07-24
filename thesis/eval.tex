@@ -1,7 +1,7 @@
 \chapter{Evaluation}\label{sec:eval}
 
 With implementation considerations sorted out in \cref{sec:impl}, we turn to assessing the analysis by means of the performance of the generated code in \cref{sec:bench}.
-We also discuss compiler performance in \cref{sec:compperf} and see ways to trade artifact performance for faster analysis time in \cref{sec:tradeoff}.
+We also discuss compiler performance in \cref{sec:compperf} and see ways to trade artifact performance for analysis performance.
 
 \section{Benchmarks}\label{sec:bench}
 
@@ -9,7 +9,7 @@ Enough with the mathy chit chat, give me numbers!
 
 In this section we will look at how the analysis influences benchmark results in GHC's nofib \parencite{nofib} benchmark suite.
 
-A GHC 8.2.1 release candidate, revision \texttt{83a6dd8}, serves as a baseline. We compare to three variants of our fork\footnote{Available at https://github.com/sgraf812/ghc under the branches \texttt{cocall-full}, \texttt{cocall-approximate-calls} and \texttt{cocall-complete-graphs}.}:
+The (at the time of writing most recent) GHC 8.2.1 release, revision \texttt{0cee252} and tagged as \texttt{ghc-8.2.1-release}, serves as a baseline. We compare to three variants of our fork\footnote{Available at https://github.com/sgraf812/ghc under the branches \texttt{cocall-full}, \texttt{cocall-approximate-calls} and \texttt{cocall-complete-graphs}.}:
 
 \begin{enumerate}
   \item[\varfull] 
@@ -18,59 +18,71 @@ A GHC 8.2.1 release candidate, revision \texttt{83a6dd8}, serves as a baseline. 
     The usage information the Demand Analyser produces is only accessed to check for regressions.
   \item[\varcalls]
     This variant discards any product use at call sites. 
-    E.g., $C^1(U(1*U,A))$ will be truncated to $C^1(U)$. 
+    E.g., $C^1(U(1*U,A))$ will be truncated to $C^1(U)$ in a call like \hsinl{let f x = ... in fst (f 42)}. 
     This is so that less nodes in the data-flow framework are accessed, to save space and time.
     Results should still show an improvement compared to the baseline.
   \item[\varedges]
-    In addition to the changes of \varcalls, replace the co-call graph by a structure which only tracks self-edges and conservatively assumes the existence of all other co-call edges.
-    The intention is to measure if the worst case quadratic complexity induced by co-call graphs matters in practice.
+    In addition to the changes of \varcalls, remove the co-call graph from the usage type. 
+    This is equivalent to a co-call graph that only tracks self-edges and conservatively assumes the existence of all other co-call edges.
+    The intention is to measure if the space and time impact of co-call graphs matters in practice.
     Note that regressions in some cases are expected, as the baseline employs Call Arity with accurate modelling of edges in co-call graphs at least between `interesting' variables \parencite[section~3.4.1]{callarity}.
 \end{enumerate}
 
-\begin{figure}[hb]
-\begin{center}
+\begin{table}
+  \centering
+  \begin{tabular}{lrrrrrr}
+    \toprule
+            & \multicolumn{3}{c}{Bytes allocated} & \multicolumn{3}{c}{Instructions executed} \\
+              \cmidrule(lr){2-4} \cmidrule(lr){5-7}
+    Program & \multicolumn{1}{c}{\varfull} & \multicolumn{1}{c}{\varcalls} & \multicolumn{1}{c}{\varedges} & \multicolumn{1}{c}{\varfull} & \multicolumn{1}{c}{\varcalls} & \multicolumn{1}{c}{\varedges} \\
+    \midrule
+    \input{benchmarks/usage-anal-nofib-table.tex}
+    \bottomrule
+  \end{tabular}
+  \caption{
+    Benchmark results of running nofib where the number improved by more than 0.3\% or regressed by more than 0.0\%.
+    The GHC 8.2.1 release on which all work is based was used as a baseline.
+    Variants \varfull to \varedges are increasingly approximate, but theoretically speaking, only \varedges may possibly yield worse results than the baseline's combination of Call Arity and Demand Analysis.
+  }
+  \label{tbl:nofib}
+\end{table}
+
+\Cref{tbl:nofib} shows the interesting results of running nofib.
+We will break them down by discussing allocations and instructions executed separately.
+
+\subsection{Allocations}\label{sec:alloc}
+
+The total impact on allocations of our rather complex analysis is rather meager, with a reduction that doesn't even exceed the 0.1\% margin in the geometric mean over all benchmarks.
+But recalling the goals of this thesis, namely unifying both Call Arity \parencite{callarity} and the work of \textcite{card} into a single analysis, this is good news and asserts our claims in \cref{sec:generalise}!
+
+\begin{table}
+  \centering
   \begin{tabular}{lrrr}
     \toprule
             & \multicolumn{3}{c}{Bytes allocated} \\
               \cmidrule(lr){2-4}
     Program & \multicolumn{1}{c}{\varfull} & \multicolumn{1}{c}{\varcalls} & \multicolumn{1}{c}{\varedges} \\
     \midrule
-    ansi & -0.5\% & +0.3\% & +0.1\%\\
-    awards & -0.2\% & +0.1\% & +0.0\%\\
-    expert & -0.2\% & +0.2\% & +0.1\%\\
-    fft2 & -2.2\% & -2.2\% & -2.2\%\\
-    fluid & -1.5\% & -1.5\% & -1.5\%\\
-    grep & -0.6\% & +0.5\% & +0.2\%\\
-    infer & +0.0\% & +0.0\% & +0.0\%\\
-    n-body & -0.5\% & +0.0\% & -0.1\%\\
-    queens & -0.7\% & -0.7\% & -0.7\%\\
-    rfib & -0.5\% & +0.3\% & +0.1\%\\
-    scc & -0.3\% &  0.0\% & -0.3\%\\
-    spectral-norm & -0.3\% & +0.1\% & -0.0\%\\
-    tak & -0.7\% & +0.1\% & -0.1\%\\
-    x2n1 & -0.2\% & +0.1\% & +0.0\%\\
-    \emph{... and 90 more} \\
-    \midrule
-    Min & -2.2\% & -2.2\% & -2.2\%\\
-    Max & +0.0\% & +0.5\% & +0.2\%\\
-    Geometric Mean & -0.1\% & -0.0\% & -0.0\%\\
+    \input{benchmarks/usage-anal-nofib-table-alloc.tex}
     \bottomrule
   \end{tabular}
-\end{center}
-\caption{
-  Benchmark results of running nofib where the savings in allocations were greater than 0.1\% or where allocations got worse.
-  A GHC 8.2.1 release candidate on which all work is based was used as a baseline.
-  Variants \varfull to \varedges are increasingly approximate, but theoretically speaking, only \varedges may possibly yield worse results than the baseline's combination of Call Arity and Demand Analysis.
-}
-\label{tbl:nofib}
-\end{figure}
+  \caption{
+    Interesting allocation results from the same run as \cref{tbl:nofib}.
+    The only runs that were excluded were those with improvements of less than 0.1\%.
+  }
+  \label{tbl:alloc}
+\end{table}
 
-\Cref{tbl:nofib} shows the results of running nofib.
-The total impact of our rather complex analysis is rather meager, with only a reduction of 0.1\% in the geometric mean over all benchmarks.
-But recalling the goal of this thesis, namely unifying both Call Arity \parencite{callarity} and Cardinality Analysis \parencite{card} into a single analysis, this is good news and asserts our claims in \cref{sec:generalise}!\smallskip
+Alloction results are summarised in \cref{tbl:alloc}.
+There is one tiny regression to allocations due to heuristics:
+A partial application in \progname{infer} is regarded cheap to duplicate by GHC.
+Therefore, our analysis spots a new opportunity for $\eta$-expansion and the binding gets inlined subsequently.
+Although the resulting program allocates more than before, the number of executed instructions (\cf \cref{tbl:nofib}) went slightly down over all.
 
-All variants exhibit the major positive outliers in \texttt{fft2}, \texttt{fluid} and \texttt{queens}.
-To understand what happens for \texttt{fft2}, consider the following program:
+The most significant improvement happened to the allocations of \progname{fluid}, with a 1.5\% reduction due to arity expansion of some parsing function.
+
+It is more instructive to look at \progname{fft2}. 
+The 0.9\% improvement in allocations comes from an expression within \texttt{dfth} similar to the following program:
 \begin{haskellcode}
   module Main (main) where
 
@@ -91,19 +103,109 @@ To understand what happens for \texttt{fft2}, consider the following program:
 \end{haskellcode}
 
 Our analysis finds out that \hsinl{f} can be $\eta$-expanded to arity 2.
-Neither Call Arity nor Cardinality Analysis recognises this.
+Neither Call Arity nor the Demand Analyser recognises this.
 
 Call Arity doesn't have any mechanism similar to usage signatures, so it assumes a conservative call arity of 1 for \hsinl{f} because of the call \hsinl{c x (f (x-1))}.
 
-Cardinality Analysis, on the other hand, has available only the usage signature for manifest arity 2, which is too conservative and unleashes a usage of $1*U$ on \hsinl{f (x-1)} instead of $1*C^1(U)$.
+The Demand Analyser, on the other hand, has available only the usage signature for manifest arity 2, which is too conservative and unleashes a usage of $1*U$ on \hsinl{f (x-1)} instead of $1*C^1(U)$.
 
 Our analysis infers from the call to \hsinl{c} with incoming arity 3 a call use of $C^1(U)$ for \hsinl{f (x-1)}, exposing \hsinl{f} to a total usage of $C^\omega(C^1(U))$, which we can leverage by expanding the arity to 2.
-Something similar happens in \texttt{fft2} within the function \hsinl{dfth}, enabling additional inlining and other transformations. \smallskip
 
-As expected, variant \varfull does not cause regressions in allocations, except for \texttt{infer}, where a partial application (which is regarded cheap to duplicate by GHC) is $\eta$-expanded and inlined subsequently.
+In expanding the analogue of \hsinl{f} within \texttt{dfth}, the analysis enables additional inlining and other transformations.
+\smallskip
 
-\tod{Discuss \varcalls when the results are there.}
-Even the most approximate variant evaluated, \varedges, still yields a negligible improvement overall, but gets rid of the potential quadratic blowup of co-call graphs.
+Apart from the very modest extreme cases, it is worth pointing out that allocation remained the same throughout all variants!
+This is extremely important for practicality of the analysis, as we will see in \cref{sec:compperf}.
 
+\subsection{Instructions Executed}\label{sec:instr}
 
+Regarding instructions executed (measured with \texttt{cachegrind}), there are more significant improvements, although that might not reflect in performance on an actual machine.
+In the geometric mean we achieve a total improvement of 0.6\%, which still is rather modest, but as said earlier not the primary goal of this thesis.
+
+\begin{table}
+  \centering
+  \begin{tabular}{lrrr}
+    \toprule
+            & \multicolumn{3}{c}{Instructions executed} \\
+              \cmidrule(lr){2-4}
+    Program & \multicolumn{1}{c}{\varfull} & \multicolumn{1}{c}{\varcalls} & \multicolumn{1}{c}{\varedges} \\
+    \midrule
+    \input{benchmarks/usage-anal-nofib-table-instrs.tex}
+    \bottomrule
+  \end{tabular}
+  \caption{
+    Interesting programs with respect to instructions executed, from the same run as \cref{tbl:nofib}.
+    Excluded were those runs with improvements of less than 3\% and regressions of less than 1\%.
+  }
+  \label{tbl:instr}
+\end{table}
+
+Let's focus instead on the most significant outliers in \cref{tbl:instr}.
+There is \progname{fannkuch-redux} from the benchmarks game, which regresses significantly by executing 11.4\% more instructions.
+
+Looking at the Core output, it is not obvious to see where that regression comes from.
+There were no subsequent transformations kicked off by the added annotations, and the annotations seem to be correct, judging from sprinkling a few \hsinl{Debug.Trace.trace} calls.
+However when considering the decrease in allocations, it seems like GHC's heuristic cost model could be responsible for this, if not in some imported \texttt{base} module.
+
+Conversely, the cases where performance improves are more frequent.
+The largest boost receives \progname{gen\_regexps}, with 28.1\% less executed instructions.
+Yet again, it is not appearent where those improvements come from. 
+All annotations in the Core output seem proper and beyond that no further transformation happened.
+This suggests that either the backend (the implementation of which the author is blissfully unaware) or some optimisation within referenced \texttt{base} modules is responsible.
+
+The same arguments apply to the 15.4\% improvement in \progname{puzzle}:
+A number of new annotations that haven't kicked of any further Core-to-Core transformation.
+The set of functions referenced from \texttt{base} is quite minimal, to it is unlikely that optimisations hide there.
+
+\subsection{Compiler Performance}\label{sec:compperf}
+
+The graph data structure necessary for modelling co-call graphs is quite complicated, optimised for sparse and dense graphs to even offer manageable compiler performance.
+
+Yet for some input files, time and -- worse -- space complexity goes through the roof:
+The space needed to compile some innocent file like \texttt{GHC/Types.hs} from \texttt{ghc-prim} goes up from a few hundred megabytes to multiple gigabytes.
+Clearly, this is unacceptable for a mature and widely used compiler like GHC.
+
+Heap profiling revealed that the explosion is indeed related to co-call graphs, peaks in memory needed to store \hsinl{IntMap}s, in particular.
+Practically all of the overhead is attributed to \hsinl{UsageAnal.Types.bothUsageType}, which computes the union of three graphs on each invocation. 
+It is being used quite often, for example as part of the expensive graph substitution procedure.
+
+Even in a version of \varedges where the co-call graphs still were present in a dumb fashion (\eg just tracking self-edges), \hsinl{UnVarGraph.completeBipartiteGraph} seemed to be responsible for the major blowup, even though the quadratic space complexity should have been eliminated.
+
+\begin{table}
+  \centering
+  \begin{tabular}{lrrrrrr}
+    \toprule
+            & \multicolumn{3}{c}{Bytes allocated} & \multicolumn{3}{c}{Instructions executed} \\
+              \cmidrule(lr){2-4} \cmidrule(lr){5-7}
+    Program & \multicolumn{1}{c}{\varfull} & \multicolumn{1}{c}{\varcalls} & \multicolumn{1}{c}{\varedges} & \multicolumn{1}{c}{\varfull} & \multicolumn{1}{c}{\varcalls} & \multicolumn{1}{c}{\varedges} \\
+    \midrule
+    \input{benchmarks/usage-anal-nofib-comp-table.tex}
+    \input{benchmarks/usage-anal-ghc-comp-table.tex}
+    \bottomrule
+  \end{tabular}
+  \caption{
+    Performance figures recorded while compiling GHC and nofib with the three variants, relative to GHC 8.2.1.
+    Resource usage of \varfull and \varcalls grows beyond limits in specific cases, accounting for a major blowup overall.
+    The most approximate variant, \varedges, shows an acceptable increase, knowing that there are quite some opportunities left for making it more efficient.
+  }
+  \label{tbl:compperf}
+\end{table}
+
+With that out of the way, we may risk a look at \cref{tbl:compperf}, which shows the performance figures recorded while compiling itself and nofib.
+
+Every variant consumes more resources than the baseline. 
+That is not surprising: 
+We replaced a single run of Call Arity by three runs of our analysis, of which a single run can hardly be cheaper.
+However, the Demand Analyser still performs Cardinality Analysis on every of its two runs, which could be left out.
+
+There is still plenty of opportunity left to reach acceptable performance.
+Our variant \varedges, for example, doesn't exhibit the same problematic space complexity as the other variants, because it gets rid of co-call graphs altogether.
+It turns out that call arity aware \letdnsc-style analysis (as in \varedges) is precise enough to optimise all important cases!
+
+The whole graph-based data-flow iteration story doesn't yet run as performant as it could.
+Currently, a \hsinl{Map} is used to map nodes to transfer functions.
+If all syntax nodes would provide sensible \hsinl{FrameworkNode}s, modeling the graph as a fixed-size array of monotone maps is possible.
+Also, the whole \hsinl{FrameworkBuilder} incantation would be obsolete if \hsinl{CoreExpr} carried appropriate \hsinl{FrameworkNode}s.
+
+All in all, it is too early to judge the replacement for Cardinality Analysis and Call Arity by compiler performance.
 
