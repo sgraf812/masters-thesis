@@ -3,7 +3,10 @@
 use strict;
 use warnings;
 
-my $cols = scalar(@ARGV)-1;
+my $cols = scalar(@ARGV)-4;
+my $min = $ARGV[$cols+1];
+my $max = $ARGV[$cols+2];
+my $allregressions = $ARGV[$cols+3];
 
 my $skipped = 0;
 while (<STDIN>) {
@@ -12,8 +15,10 @@ while (<STDIN>) {
 	# remove absolute values
 	s/\d+\.\d+( \&|\\\\)/$1/g;
 
-	# any interesting? e.g. not in [0.0,0.1]
-	if (!/[\s-]0\.[01]\\%/ || /\d\d\./) {
+	# any interesting ratio? e.g. not in [$min,$max]
+	# also we include all regressions (they have a plus) if that's what is wanted
+	my @ratios = /(-?\d{1,2}.\d)\\%/g;
+	if ((grep { $_ < $min || $max < $_ } @ratios) || ($allregressions && /\+/g)) {
 		s/^([^ ]*?) /\\progname{$1} /;
 		print;
 	} else {
