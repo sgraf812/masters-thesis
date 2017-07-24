@@ -3,12 +3,12 @@
 use strict;
 use warnings;
 
-my $cols = scalar(@ARGV)-4;
-my $min = $ARGV[$cols+1];
-my $max = $ARGV[$cols+2];
-my $includeinfer = $ARGV[$cols+3];
+my $min = $ARGV[0];
+my $max = $ARGV[1];
+my $includeinfer = $ARGV[2];
 
 my $skipped = 0;
+my $amps = 0;
 while (<STDIN>) {
 	last if /\\hline/;
 
@@ -19,13 +19,14 @@ while (<STDIN>) {
 	# also we include all regressions (they have a plus) if that's what is wanted
 	my @ratios = /(-?\d{1,2}.\d)\\%/g;
 	if ((grep { $_ < $min || $max < $_ } @ratios) || ($includeinfer && /infer/g)) {
+		$amps = () = /&/g;
 		s/^([^ ]*?) /\\progname{$1} /;
 		print;
 	} else {
 		$skipped++;
 	}
 }
-print "\\andmore{$skipped}" . (" &" x (2*$cols)) . " \\\\\n";
+print "\\andmore{$skipped}" . (" &" x $amps) . " \\\\\n";
 print "\\midrule\n";
 while (<STDIN>) {
 	s/^(.*?) &/\\totalname{$1} &/;
