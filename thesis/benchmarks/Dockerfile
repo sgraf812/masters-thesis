@@ -20,6 +20,3 @@ RUN git -C ghc/ remote add origin git://git.haskell.org/ghc.git
 RUN git -C ghc/ fetch origin ghc-8.2
 RUN git -C ghc/ checkout 83a6dd8
 RUN git -C ghc/ submodule update --init
-
-COPY run-nofib.sh /
-COPY patch-and-run.sh /
