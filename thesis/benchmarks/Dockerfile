@@ -14,9 +14,6 @@ RUN apt-get install --yes autoconf
 RUN apt-get install --yes time
 RUN apt-get install --yes libncurses5-dev libffi-dev libgmp-dev
 
-RUN mkdir ghc/
-RUN git -C ghc/ init
-RUN git -C ghc/ remote add origin git://git.haskell.org/ghc.git
-RUN git -C ghc/ fetch origin ghc-8.2
-RUN git -C ghc/ checkout 83a6dd8
+RUN git clone --recursive git://git.haskell.org/ghc.git
+RUN git -C ghc/ checkout 0cee252
 RUN git -C ghc/ submodule update --init
