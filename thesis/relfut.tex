@@ -4,4 +4,50 @@ This section is dedicated to comparison of our analysis with prior approaches in
 
 \section{Related Work}\label{sec:rel}
 
-This section mostly refines the relevant sections from \textcite{callarity} and \textcite{card} with how own findings fit into the bigger picture.
+\subsubsection{Abstract Interpretation}
+
+Within the framework of \emph{abstract interpretation}, questions of cardinality have been successfully answered by backwards analyses based on \emph{projections} \parencite{projs} in the past.
+
+Being an extension to the approach of \textcite{card}, with all the bells and whistles such as call and product uses, our usage analysis is no different:
+What we called usage transformers came into the world as the strictness-specific concept of \emph{projection transformers} \parencite{projimpl}, describing how a use on an expression translates into a use on its free variables and arguments.
+We showed how the overlap in Call Arity \parencite{callarity} and Cardinality Analysis (as in \parencite{card}) can be leveraged by giving a usage analysis that generalises the results of both analyses, in order to possibly replace both in the long run.
+
+Key was the observation that call arity (the minimum number of arguments a binding is applied to) can be computed independently of whether $\eta$-expanding the binding to that arity is possible, considering sharing.
+In other words:
+By enriching the domain of discourse to model more precise usage information, we could break the interleaving of sharing and arity analysis out of Call Arity \parencite{callarity}.
+Usage information is now computed by our usage analysis, while the arity analysis is done by GHC's regular arity analysis, specifically feeding on one-shot annotations\footnote{Provided a little incentive from our side to always $\eta$-expand cheap (according to GHC's cost model) expressions, so that the behavior of Call Arity is matched.}.
+
+\subsubsection{Type Systems}
+
+For comparing our analysis to approaches based on type systems, we kindly refer to \textcite[section~8]{card}, who provide a great overview over recent advances.
+We provide a summary of their excellent writing for completenes.
+
+While linear type systems can express single-entry and one-shot annotations quite naturally (modulo the caller \vs callee distiction \parencite{card}), they proved to be too restrictive \parencite{polytype}.
+Nonetheless, this led to a series of papers on type systems, specifically tailored to do usage analysis \parencite{type}.
+\parencite{polytype} identified polymorphism and subtyping to be essential for good results, which in conjunction with an exponentially growing number of annotations needed \parencite{warnsbrough} elicited unacceptable complexity, both in terms of performance and in the implementation.
+
+The main disadvantage of the approach by abstract interpretation is worse approximations across function boundaries.
+\textcite{card} (and therefore our solution) recovers a good deed of that opportunity by computing usage signatures to appropriately analyse first- and second-order functions.
+Also, the very aggressive inliner of GHC reduces the cases where interprocedural information flow is important to recursive functions.
+
+\textcite{card} also compare the analysis strategy for \hsinl{let} bindings to that of type system.
+They conclude that type systems operate similar to \letupsc, which has several drawbacks compared to \letdnsc (corresponding to the more operational view) as outlined in \cref{sec:let}.
+Dealing with free variables in a precise manner requires polymorphic effect systems as in \textcite{sharing}, which try to alleviate some of the pain regarding subtyping.
+
+A recent type-based approach by \textcite{verstoep}, seemingly originating from his master's thesis \parencite{verstoepthesis}, offers a similar take at the problem as the Demand Analyser, computing all relevant cardinality information (absence, sharing, strictness, uniquess) in one run.
+Strongly inspired by \textcite{warnsbrough}, they differentiate \emph{use} from \emph{demand}, resp. \emph{call use} and \emph{evaluation} in our language (\cf \cref{sec:zoo}), in order to handle \hsinl{seq} appropriately.
+They plan to integrate their work into the Utrecht Haskell Compiler, the inliner of which doesn't seem to be as aggressive as GHC's.
+Although the approach uses a combination of polymorphism, subtyping and annotation of data types, the combination of which was identified as problematic by \textcite{card}, it is argued that running the analysis plays out in terms of compiler performance, because it provides a wealth of information.
+
+\subsubsection{Data-flow Frameworks}
+
+For the implementation of imperative languages, data-flow analysis on control flow graphs or directly on graph-based intermediate representations \parencite{firm} \parencite{thorin} are the norm.
+
+There's even a Haskell library for analysing and transforming control flow graphs, \texttt{hoopl}, introduced in \textcite{hoopl} and used in the C-- backend of GHC.
+On first sight, our \texttt{Worklist} module seems to be a direct contender to \texttt{hoopl} and in fact we considered to use \texttt{hoopl} for our purposes.
+However, as we discovered the API, it became evident quickly that expressing our rather complex analysis in terms of the traditional gen/kill set terminology was quite impossible. 
+
+Thus we created our own solution to the problem, which worked out quite well for us:
+We got to abstract iteration logic behind a \hsinl{State} monad, which we exposed through a single impure primitive, leading to analysis logic that is completely decoupled from iteration and change detection logic.
+
+\section{Future Work}\label{sec:fut}

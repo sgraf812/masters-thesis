@@ -4,7 +4,7 @@ This chapter will start out by laying out some ground work for later sections.
 
 There seems to be no ubiquitous domain language on the various cardinality analyses floating around in papers over the years, so \cref{sec:zoo} will provide a glossary for that.
 
-We'll give abridgements of the two analyses we aim to generalise in \cref{sec:callarity} and \cref{sec:dmdanal}.
+We'll give abridgements of the two analyses we aim to generalise in \cref{sec:callarity} and \cref{sec:dmd}.
 
 \section{Analysis Zoo}\label{sec:zoo}
 
@@ -67,7 +67,6 @@ Thus, a cardinality analysis assigns each binding an interval of its maximum und
 In the example above, \hsinl{a} would be annotated with $[1,\omega]$ (evaluated at least once, possibly many times), whereas the absent \hsinl{e} would be annotated with $[0, 0]$ (evaluated at most never).
 
 This is exactly the notion of usage-interval analysis in \textcite[chapter~5]{sestoft}, which defines `usage count' as what we call cardinality.
-As observed by \parencite[section~1.5]{warnsbrough}, this corresponds to the Bierman lattice \parencite{bierman} without the $\neq 1$ case.
 
 \subsection{Strictness Analysis}\label{sec:strict}
 

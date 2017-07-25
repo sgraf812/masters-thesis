@@ -1,3 +1,83 @@
+@phdthesis{sestoft,
+author = {Sestoft, Peter},
+title = {{Analysis and Efficient Implementation of Functional Programs}},
+year = {1991}
+}
+@phdthesis{verstoepthesis,
+abstract = {There are a number of di erent analyses for functional languages that count in one way or another (e.g., strictness analysis, sharing analysis). There has been a lot of research into each of these analyses individually. The analysis described in this thesis combines a number of these counting analyses into one analysis.},
+author = {Verstoep, Hidde},
+school = {Utrecht University},
+title = {{Counting Analyses}},
+year = {2013}
+}
+@inproceedings{hoopl,
+address = {New York, NY, USA},
+author = {Ramsey, Norman and Dias, Jo{\~{a}}o and {Peyton Jones}, Simon},
+booktitle = {Proceedings of the Third ACM Haskell Symposium on Haskell},
+doi = {10.1145/1863523.1863539},
+isbn = {978-1-4503-0252-4},
+keywords = {dataflow},
+pages = {121--134},
+publisher = {ACM},
+series = {Haskell '10},
+title = {{Hoopl: A Modular, Reusable Library for Dataflow Analysis and Transformation}},
+year = {2010}
+}
+@inproceedings{type,
+address = {New York, NY, USA},
+author = {Turner, David N and Wadler, Philip and Mossin, Christian},
+booktitle = {Proceedings of the Seventh International Conference on Functional Programming Languages and Computer Architecture},
+doi = {10.1145/224164.224168},
+isbn = {0-89791-719-7},
+pages = {1--11},
+publisher = {ACM},
+series = {FPCA '95},
+title = {{Once Upon a Type}},
+year = {1995}
+}
+@inproceedings{polytype,
+abstract = {We present a sound type-based `usage analysis' for a realistic lazy functional language. Accurate information on the usage of program subexpressions in a lazy functional language permits a compiler to perform a number of useful optimisations. However, existing analyses are either ad-hoc and approximate, or defined over restricted languages. Our work extends the Once Upon A Type system of Turner, Mossin, and Wadler (FPCA'95). Firstly, we add type polymorphism, an essential feature of typed functional programming languages. Secondly, we include general Haskell-style user-defined algebraic data types. Thirdly, we explain and solve the `poisoning problem', which causes the earlier analysis to yield poor results. Interesting design choices turn up in each of these areas. Our analysis is sound with respect to a Launchbury-style operational semantics, and it is straightforward to implement. Good results have been obtained from a prototype implementation, and we intend to integrate the system into a production compiler.},
+author = {Wansbrough, K and {Peyton Jones}, Simon},
+booktitle = {26th ACM Symposium on Principles of Programming Languages (POPL'99)},
+pages = {15--28},
+publisher = {ACM Press},
+title = {{Once Upon a Polymorphic Type}},
+year = {1999}
+}
+@inproceedings{verstoep,
+address = {New York, NY, USA},
+author = {Verstoep, Hidde and Hage, Jurriaan},
+booktitle = {Proceedings of the 2015 Workshop on Partial Evaluation and Program Manipulation},
+doi = {10.1145/2678015.2682536},
+isbn = {978-1-4503-3297-2},
+keywords = {absence analysis,cardinality analysis,polyvariance,sharing analysis,type-based program analysis,uniqueness typing,usage analysis},
+pages = {139--142},
+publisher = {ACM},
+series = {PEPM '15},
+title = {{Polyvariant Cardinality Analysis for Non-strict Higher-order Functional Languages: Brief Announcement}},
+year = {2015}
+}
+@inbook{projimpl,
+abstract = {Projection-based backwards strictness analysis has been understood for some years. Surprisingly, even though the method is fairly simple and quite general, no reports of its implementation have appeared. This paper describes ideas underlying our prototype implementation of the analysis for a simple programming language. The implementation serves as a case study before applying the method in the Glasgow Haskell compiler.},
+address = {London},
+author = {Kubiak, Ryszard and Hughes, John and Launchbury, John},
+booktitle = {Functional Programming, Glasgow 1991: Proceedings of the 1991 Glasgow Workshop on Functional Programming, Portree, Isle of Skye, 12--14 August 1991},
+doi = {10.1007/978-1-4471-3196-0_17},
+editor = {Heldal, Rogardt and Holst, Carsten Kehler and Wadler, Philip},
+isbn = {978-1-4471-3196-0},
+pages = {207--224},
+publisher = {Springer London},
+title = {{Implementing Projection-based Strictness Analysis}},
+year = {1992}
+}
+@phdthesis{projs,
+abstract = {Strictness analysis may be characterized as a compile-time technique for gaining information about lazy functional programs that can be used to improve the generation of code. An instance of strictness analysis is projection-based backward analysis which was motivated in part by the need for a method that could analyse data structures such as lists, trees etc. The essential flow of information is backward: Given information about the required definedness of the result of a function information about the required definedness of its arguments is determined. Bounds on the definedness of values are specified by projections, a concept borrowed from domain theory. The non-standard semantics of a function, its abstraction, is given by a projection transformer satisfying a certain property of safety. This work contributes both to the theoretical foundations of backward analysis and to its practical implementation. Atheory of projections is developed collecting and extending results from various sources. Among other things we study the representation of projections and their algebraic properties. It is shown that every continuous, first-order function possesses a least abstraction which in turn characterizes the function—provided it is strict. Unfortunately, least abstractions fail to be compositional. This desirable property is established by focusing on the stable functions of Berry. Building on the theory of stable functions we then define a non-standard semantics mapping a textual function to its least abstraction. In order to make the analysis effective infinite domains of projections must be approximated by finite domains. We elaborate in particular on the representation of projections on polymorphic types extending previous work on this subject. An approximation semantics is presented and applied to a variety of functions. However, due to the exponential growth of the finite domains the analysis proves to be only feasible for small types. As a solution to this problem we propose an alternative technique with a dramatically improved average-case behaviour. The technique is based on a compact representation of abstractions using monotone Boolean functions.},
+author = {Hinze, Ralph},
+pages = {237},
+school = {Universit{\"{a}}t Bonn},
+title = {{Projection-based strictness analysis - theoretical and practical aspects.}},
+year = {1995}
+}
 @article{sharing,
 abstract = {Sharing analysis and uniqueness typing are static analyses that aim at determining which of a program's objects are to be used at most once. There are many commonalities between these two forms of usage analysis. We make their connection precise by developing an expressive generic analysis that can be instantiated to both sharing analysis and uniqueness typing. The resulting system, which combines parametric polymorphism with effect subsumption, is specified within the general framework of qualified types, so that readily available tools and techniques can be used for the development of implementations and metatheory. Copyright {\textcopyright} 2007 ACM.},
 author = {Hage, J and Holdermans, S and Middelkoop, A},
@@ -21,14 +101,13 @@ series = {Workshops in Computing},
 title = {{Update Avoidance Analysis by Abstract Interpretation}},
 year = {1993}
 }
-@article{Launchbury1994,
+@article{statethreads,
 abstract = {Some algorithms make critical internal use of updatable state, even though their external specification is purely functional. Based on earlier work on monads, we present a way of securely encapsulating stateful computations that manipulate multiple, named, mutable objects, in the context of a non-strict, purely-functional language. The security of the encapsulation is assured by the type system, using parametricity. Intriguingly, this parametricity requires the provision of a (single) constant with a rank-2 polymorphic type.},
 author = {Launchbury, John and {Peyton Jones}, Simon L.},
 doi = {10.1145/773473.178246},
 isbn = {089791662X},
 issn = {03621340},
 journal = {ACM SIGPLAN Notices},
-keywords = {statethreads},
 pages = {24--35},
 title = {{Lazy functional state threads}},
 volume = {29},
@@ -78,13 +157,6 @@ author = {Lei{\ss}a, Roland and Marcel, K and Hack, Sebastian},
 isbn = {9781479981618},
 title = {{A Graph-Based Higher-Order Intermediate Representation}},
 year = {2015}
-}
-@phdthesis{Verstoep,
-author = {Verstoep, Hidde},
-isbn = {9781450332972},
-keywords = {absence analysis,and sharing information,cardinality analysis,polyvariance,sharing anal-,the generic,two different instantiations of,type-based program analysis,uniqueness typing,usage analysis,ysis},
-pages = {139--142},
-title = {{Polyvariant Cardinality Analysis for Non-strict Higher-order Functional Languages}}
 }
 @article{cpr,
 author = {Baker-finch, Clem and Jones, Simon Peyton},
