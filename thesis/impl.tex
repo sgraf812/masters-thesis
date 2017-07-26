@@ -462,6 +462,8 @@ This is best understood by a simple example which already exhibits quite a compl
 
   \Cref{fig:framework} depicts the resulting data-flow framework, or rather the finite part reachable from node $(\hsinl{root}, U)$ (again, \hsinl{root} represents the usage transformer denoting the module expression). 
 
+  \newcommand{\fw}[1]{\overrightarrow{#1}}
+  \newcommand{\bw}[1]{\overleftarrow{#1}}
   \begin{figure}[h]
     \centering
     \begin{tikzpicture}[shorten >=1pt,x=7em,y=7em,auto]
@@ -477,14 +479,14 @@ This is best understood by a simple example which already exhibits quite a compl
       \node (fac1) at (1.5,0) [down] {$(\hsinl{fac}, C^1(U))$};
       \node (facn) at (1,1) [down] {$(\hsinl{fac}, U)$};
       \path[->,line width=1pt] 
-        (root) edge node {} (let1)
-        (let1) edge [loop above] node {} ()
-               edge node {} (let2)
+        (root) edge node {$\fw{1}$} (let1)
+        (let1) edge [loop above] node {2} ()
+               edge node {$\fw{3}$} (let2)
                edge node {} (facn)
-        (let2) edge node {} (main)
-        (main) edge node {} (fac1)
+        (let2) edge node {$\fw{4},\bw{8}$} (main)
+        (main) edge node {$\fw{5},\bw{7}$} (fac1)
         (facn) edge node {} (fac1)
-        (fac1) edge [loop below] node {} ();
+        (fac1) edge [loop below] node {$\fw{6},\bw{6}$} ();
     \end{tikzpicture}
     \caption{Relevant part of the data-flow framework for the \hsinl{fac} example. The module node is drawn in red, \letupsc nodes are blue and \letdnsc nodes are green.}
     \label{fig:framework}

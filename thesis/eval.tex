@@ -9,7 +9,7 @@ Enough with the mathy chit chat, give me numbers!
 
 In this section we will look at how the analysis influences benchmark results in GHC's nofib \parencite{nofib} benchmark suite.
 
-The (at the time of writing most recent) GHC 8.2.1 release, revision \texttt{0cee252} and tagged as \texttt{ghc-8.2.1-release}, serves as a baseline. We compare to three variants of our fork\footnote{Available at https://github.com/sgraf812/ghc under the branches \texttt{cocall-full}, \texttt{cocall-approximate-calls} and \texttt{cocall-complete-graphs}.}:
+The (at the time of writing most recent) GHC 8.2.1 release -- revision \texttt{0cee252}, tagged as \texttt{ghc-8.2.1-release} -- serves as a baseline. We compare to three variants of our fork\footnote{Available at https://github.com/sgraf812/ghc under the branches \texttt{cocall-full}, \texttt{cocall-approximate-calls} and \texttt{cocall-complete-graphs}.}:
 
 \begin{enumerate}
   \item[\varfull] 
@@ -73,7 +73,7 @@ But recalling the goals of this thesis, namely unifying both Call Arity \parenci
   \label{tbl:alloc}
 \end{table}
 
-Alloction results are summarised in \cref{tbl:alloc}.
+Allocation results are summarised in \cref{tbl:alloc}.
 There is one tiny regression to allocations due to heuristics:
 A partial application in \progname{infer} is regarded cheap to duplicate by GHC.
 Therefore, our analysis spots a new opportunity for $\eta$-expansion and the binding gets inlined subsequently.
@@ -141,11 +141,11 @@ In the geometric mean we achieve a total improvement of 0.6\%, which still is ra
 \end{table}
 
 Let's focus instead on the most significant outliers in \cref{tbl:instr}.
-There is \progname{fannkuch-redux} from the benchmarks game, which regresses significantly by executing 11.4\% more instructions.
+With 11.4\% more instructions executed, \progname{fannkuch-redux} from the benchmarks game regresses significantly.
 
 Looking at the Core output, it is not obvious to see where that regression comes from.
 There were no subsequent transformations kicked off by the added annotations, and the annotations seem to be correct, judging from sprinkling a few \hsinl{Debug.Trace.trace} calls.
-However when considering the decrease in allocations, it seems like GHC's heuristic cost model could be responsible for this, if not in some imported \texttt{base} module.
+However when considering the decrease in allocations, it seems that GHC's heuristic cost model could be responsible for this, if not in some imported \texttt{base} module.
 
 Conversely, the cases where performance improves are more frequent.
 The largest boost receives \progname{gen\_regexps}, with 28.1\% less executed instructions.
@@ -159,14 +159,14 @@ The set of functions referenced from \texttt{base} is quite minimal, to it is un
 
 \subsection{Compiler Performance}\label{sec:compperf}
 
-The graph data structure necessary for modelling co-call graphs is quite complicated, optimised for sparse and dense graphs to even offer manageable compiler performance.
+The graph data structure necessary for modelling co-call graphs is quite complicated, optimised for sparse and dense graphs to offer even remotely manageable compiler performance.
 
 Yet for some input files, time and -- worse -- space complexity goes through the roof:
 The space needed to compile some innocent file like \texttt{GHC/Types.hs} from \texttt{ghc-prim} goes up from a few hundred megabytes to multiple gigabytes.
 Clearly, this is unacceptable for a mature and widely used compiler like GHC.
 
-Short before finalising this thesis, we also realised that variant \varfull is not even able to compile an optimised version of the stage 2 compiler!
-Memory usage while compiling the \hsinl{LlvmCodeGen} module exceeded the 32 GB of our build machine, probably because of the involvement of \hsinl{DynFlags}, a big tuple.
+Just before finalising this thesis, we also realised that variant \varfull is not even able to compile an optimised version of the stage 2 compiler!
+Memory usage while compiling the \hsinl{LlvmCodeGen} module exceeded the 32 GB of our build machine, probably because of the involvement of \hsinl{DynFlags}, a huge tuple.
 That is why we use GHC's \texttt{bench} build flavour for our benchmarks, which still generate completely optimised artifacts with an unoptimised stage 2 compiler.
 
 Heap profiling revealed that the explosion is indeed related to co-call graphs, peaks in memory needed to store \hsinl{IntMap}s, in particular.
