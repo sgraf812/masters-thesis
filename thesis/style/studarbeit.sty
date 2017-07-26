@@ -39,8 +39,8 @@
 \fancyfoot[LE,RO]{\thepage}
 
 \definecolor{todo}{rgb}{0.8,0,0}
-\newcommand\tod[1]{\texttt{\textcolor{todo}{#1}}}
-\newcommand\todo[1]{\par\texttt{\textcolor{todo}{#1}}\par}
+\newcommand\tod[1]{\textcolor{todo}{TODO: #1}\PackageWarning{TODO:}{#1!}}
+\newcommand\todo[1]{\textcolor{todo}{TODO: #1}\PackageWarning{TODO:}{#1!}\par}
 
 \bibliography{bib}
 

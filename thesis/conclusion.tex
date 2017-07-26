@@ -1,0 +1,20 @@
+\chapter{Conclusion}\label{sec:conclusion}
+
+Demand Analysis and Call Arity share subtle commonalities.
+Our work made these very explicit by providing a usage analysis that subsumes Call Arity and the usage analysis within Demand Analysis, referred to as Cardinality Analysis.
+
+We highlighted problematic differences between the two (\cref{sec:intro}), like the \letupsc \vs \letdnsc analysis order, and showed how to systematically solve them.
+
+In \cref{sec:untangle}, we advocated a clear separation of concerns and a split of the Demand Analyser in its sub analyses, consequently.
+We substantiated our claim by pointing out a number of tradeoffs associated with performing all analyses in lockstep, without any real data dependency between them which justifies doing so.
+
+Although the abstract domain in which we interpret programs is not fundamentally different to that of \textcite{card}, we gave a more precise meaning to each element of the domain.
+In particular our treatment of usage transformers was more explicit than in \textcite{card}, which was needed because we denote our programs with them via our transfer function in \cref{sec:transfer}.
+
+As \cref{sec:impl} reveals, implementing the analysis was a particular challenges, as we needed to provide quite some infrastructure before writing the analysis in the final form was even feasible.
+We are particularly proud of our take on solving data-flow problems with a graph-based approach, decoupled from the syntax tree in \cref{sec:solve} and expect interesting further discussions.
+There were quite some hacks involved in making the analysis realisable, some of which evoked further problems, like the lack of a data structure for maps indexed by join-semilattices in \cref{sec:mono}.
+
+Although according to \cref{sec:eval} the full generalisation has performance issues due to ubiquotious use of co-call graphs (which might be entirely related to the implementation), a variant without co-call graphs seems to compromise little on precision but still reaches performance comparable to prior approaches.
+
+Opportunities for future work were discussed in \cref{sec:fut} and left the author excited to pursue some open problems and to contribute to GHC in the future.

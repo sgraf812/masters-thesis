@@ -165,6 +165,10 @@ Yet for some input files, time and -- worse -- space complexity goes through the
 The space needed to compile some innocent file like \texttt{GHC/Types.hs} from \texttt{ghc-prim} goes up from a few hundred megabytes to multiple gigabytes.
 Clearly, this is unacceptable for a mature and widely used compiler like GHC.
 
+Short before finalising this thesis, we also realised that variant \varfull is not even able to compile an optimised version of the stage 2 compiler!
+Memory usage while compiling the \hsinl{LlvmCodeGen} module exceeded the 32 GB of our build machine, probably because of the involvement of \hsinl{DynFlags}, a big tuple.
+That is why we use GHC's \texttt{bench} build flavour for our benchmarks, which still generate completely optimised artifacts with an unoptimised stage 2 compiler.
+
 Heap profiling revealed that the explosion is indeed related to co-call graphs, peaks in memory needed to store \hsinl{IntMap}s, in particular.
 Practically all of the overhead is attributed to \hsinl{UsageAnal.Types.bothUsageType}, which computes the union of three graphs on each invocation. 
 It is being used quite often, for example as part of the expensive graph substitution procedure.
@@ -184,7 +188,7 @@ Even in a version of \varedges where the co-call graphs still were present in a 
     \bottomrule
   \end{tabular}
   \caption{
-    Performance figures recorded while compiling GHC and nofib with the three variants, relative to GHC 8.2.1.
+    Performance figures recorded while compiling stage 2 GHC (unoptimised, but with optimised libraries) and nofib (completely optimised) with the three variants, relative to GHC 8.2.1.
     Resource usage of \varfull and \varcalls grows beyond limits in specific cases, accounting for a major blowup overall.
     The most approximate variant, \varedges, shows an acceptable increase, knowing that there are quite some opportunities left for making it more efficient.
   }
@@ -193,7 +197,12 @@ Even in a version of \varedges where the co-call graphs still were present in a 
 
 With that out of the way, we may risk a look at \cref{tbl:compperf}, which shows the performance figures recorded while compiling itself and nofib.
 
-Every variant consumes more resources than the baseline. 
+Compiling and optimising nofib seems to have caused a greater regression (between 10 to 20 percent) than compiling the stage 2 compiler (only 1.5 to 2.6 percent).
+That is likely the case because we used the \texttt{bench} build flavour, which optimises the dependent libraries but not the stage 2 compiler.
+This means our optimisations are not run on GHC itself, which is entirely due to the above mentioned space explosion in variant \varfull; the other variants compiled just fine.
+Again, the performance figures regarding nofib are unaffected by this.
+
+Other than that, every variant consumes more resources than the baseline. 
 That is not surprising: 
 We replaced a single run of Call Arity by three runs of our analysis, of which a single run can hardly be cheaper.
 However, the Demand Analyser still performs Cardinality Analysis on every of its two runs, which could be left out.

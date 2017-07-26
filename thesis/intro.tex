@@ -44,7 +44,7 @@ Yet there are quite a number of problems that need to be solved over the course 
 
 We present a usage analysis that generalises both Cardinality Analysis \parencite{card} and Call Arity \parencite{callarity}.
 
-\todo{Any stuff that was added after I wrote this}
+After giving a broad overview over the different analyses involved in \cref{sec:zoo}, specifically Call Arity (\cref{sec:callarity}) and the Demand Analyser (\cref{sec:dmd}), we make our point for extracting the usage analysis from the Demand Analyser into a separate analysis in \ref{sec:untangle}.
 
 A formal specification of the analysis in terms of a simplified object language is given in \cref{sec:spec}.
 The analysis works by abstract interpretation over a domain quite similar to that of \textcite{card}, outlined in \cref{sec:dom}.
@@ -55,7 +55,10 @@ Of special note are our insights on solving the graph-based data-flow problem in
 
 We discuss benchmark results in \cref{sec:eval}.
 As the goal of this thesis was to merge both analyses, improvements in benchmarks are quite secondary and serve more as a safety check for the analysis.
-More critical, we discuss regressions in compiler performance.
+More critical, we discuss regressions in compiler performance and how to resolve them.
+
+\Cref{sec:relfut} discusses related and future work, focussing on how our approach compares to papers on usage analyses published after \textcite{card}, who gave a brilliant treatment.
+We also discuss our novel graph-based solver for data-flow problems and advocate future work in the form of refactorings within GHC, just before wrapping up in \cref{sec:conclusion}.
 
 Regarding the aforementioned list of problems:
 \begin{description}
@@ -63,7 +66,7 @@ Regarding the aforementioned list of problems:
     It turned out that through adopting the language of Cardinality Analysis to describe analysis results of Call Arity (\cf \cref{sec:generalise}), we could leverage the pre-existing arity analysis to handle (the bulk of) $\eta$-expansion for us.
     We also integrated co-call graphs into the analysis and measured their impact on analysis results and performance in \cref{sec:eval}.
     Integrating the analysis directly with the Demand Analyser was considered at first, but quickly rejected because of far reaching consequences of what would have happened to be a rewrite.
-    We also advocate that this was for the better from a perspective of separation of concerns as outlined in \tod{Write about untangling Demand Analyser}.
+    We also advocate that this was for the better from a perspective of separation of concerns as outlined in \cref{sec:untangle}.
   \item[Let bindings]
     Current analyses within GHC perform fixed-point iteration directly along the syntactic structure of the expression to analyse.
     Effectively, every analysis defines its own data-flow iteration algorithm, interleaved with actual analysis logic.

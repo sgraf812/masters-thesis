@@ -34,10 +34,13 @@ Also, the very aggressive inliner of GHC reduces the cases where interprocedural
 They conclude that type systems operate similar to \letupsc, which has several drawbacks compared to \letdnsc (corresponding to the more operational view) as outlined in \cref{sec:let}.
 Dealing with free variables in a precise manner requires polymorphic effect systems as in \textcite{sharing}, which try to alleviate some of the pain regarding subtyping.
 
-A recent type-based approach by \textcite{verstoep}, seemingly originating from his master's thesis \parencite{verstoepthesis}, offers a similar take at the problem as the Demand Analyser, computing all relevant cardinality information (absence, sharing, strictness, uniquess) in one run.
+A recent type-based approach by \textcite{verstoep} seemingly originating from his master's thesis \parencite{verstoepthesis}. 
+It offers a similar take at the problem as the Demand Analyser, computing all relevant cardinality information (absence, sharing, strictness, uniquess) in one run.
 Strongly inspired by \textcite{warnsbrough}, they differentiate \emph{use} from \emph{demand}, resp. \emph{call use} and \emph{evaluation} in our language (\cf \cref{sec:zoo}), in order to handle \hsinl{seq} appropriately.
-They plan to integrate their work into the Utrecht Haskell Compiler, the inliner of which doesn't seem to be as aggressive as GHC's.
-Although the approach uses a combination of polymorphism, subtyping and annotation of data types, the combination of which was identified as problematic by \textcite{card}, it is argued that running the analysis plays out in terms of compiler performance, because it provides a wealth of information.
+They plan to integrate their work into the Utrecht Haskell Compiler (UHC), the inliner of which doesn't seem to be as aggressive as GHC's.
+According to own claims \parencite{verstoepthesis}, the approach enriches the work of \textcite{warnsbrough} with a combination of polymorphism and polyvariance, also adding an option for uniqueness typing.
+Although the ensemble of polymorphism, subtyping and annotating data types was identified as problematic by \textcite{card}, it is argued that running the analysis plays out in terms of compiler performance, because it provides a wealth of information \parencite{verstoep}.
+There are no numbers yet to substantiate that claim, appearently because integration into UHC isn't finished yet.
 
 \subsubsection{Data-flow Frameworks}
 
@@ -48,6 +51,53 @@ On first sight, our \texttt{Worklist} module seems to be a direct contender to \
 However, as we discovered the API, it became evident quickly that expressing our rather complex analysis in terms of the traditional gen/kill set terminology was quite impossible. 
 
 Thus we created our own solution to the problem, which worked out quite well for us:
-We got to abstract iteration logic behind a \hsinl{State} monad, which we exposed through a single impure primitive, leading to analysis logic that is completely decoupled from iteration and change detection logic.
+We got to abstract data-flow iteration logic behind a \hsinl{State} monad, for which we exposed a single impure primitive, leading to analysis logic that is completely decoupled from fixed-point iteration and change detection logic.
 
 \section{Future Work}\label{sec:fut}
+
+Developing the deep understanding of Call Arity and Cardinality Analysis necessary to merge the two in itself was quite time consuming.
+Implementing a few unmentioned iterations of the analysis, combined with fixing all the repercussions of hacking on a central part of GHC took even more time.
+Also considering the effort invested in fleshing out the writing, it is clear that some things were out of scope for this thesis.
+
+For reasons conjectured in \cref{sec:bench}, the full analysis can't cope with some input programs, space-wise.
+Interestingly, the problem wasn't so much the topology of graphs (which were almost exclusively sparse or dense), so it remains to be seen if the painful resource usage explosion can be remedied.
+The obvious solution is to employ the much better performing third variant, which still provides a benefit over the separate Call Arity and Cardinality Analysis at hardly any cost in precision.
+
+It would be interesting to see if some more explicitly operational model of sharing would alleviate the need for the \letupsc analysis order, as it is responsible for some imprecision even when refined with co-call graphs (\cf the examples in \cref{sec:let}).
+All our attempts to split off shared evaluation failed because of the complex interaction with sequential composition (\eg $\both$).
+Also, the grain of improvement to precision probably wouldn't matter much, as we already are at the far end of diminishing returns, it seems.
+But it would be interesting to see the comparison to variant \varedges exactly for that reason.
+
+The requirement for an iteration order decoupled from the syntax tree came from better arity-aware \letdnsc-style analysis.
+In \cref{sec:solve}, we quickly came to the conclusion that in order to keep our sanity, we had to separate iteration logic from analysis logic.
+
+This turned out to be an interesting path that no-one seems to have taken before:
+We abstract in the \hsinl{Worklist} module a (currently rather limited) approach to iterating data-flow frameworks defined by mutually recursive \hsinl{TransferFunction}s.
+Our formulation still misses a lot of potential abstraction and performance tuning.
+
+Thinking in broader strokes, we could easily see this graph-based fixed-point iteration scheme become more widely used throughout GHC's analyses.
+In order for that to happen, assignment of \hsinl{FrameworkNode}s to syntactic elements should be done once in a central place after transformation passes, that this needless redundancy won't bleed into analysis logic.
+
+There's also the issue of monotonicity, discussed in \cref{sec:mono}.
+This is a consequence of how we encoded usage transformers:
+The lack of an appropriate data structure to model monotone maps over join-semilattices forced us to use ordinary maps instead.
+The total ordering used for the balanced search tree doesn't coincide with the join-semilattice structure expressed by $\llub$ in any way, so the potentially helpful functions \hsinl{Map.lookupLT} were of no use at all. 
+Let alone that they have the wrong return type to express multiple lower bounds, which are possible in a lattice.
+Thus, an easy improvement over the current situation would be to look out for an algorithmic solution to lookup values in a data structure that is keyed by a (join semi-)lattice.
+The underlying data structure would have to maintain multiple sources of a directed acylclic graph to be remotely efficient, but considering that only very few points of a usage transformer are ever requested, this seems like no big deal.
+
+A data structure for monotone maps would completely get rid of the monotonicity hacks in \cref{sec:mono} and conceivably lead to better performance of the analysis overall.
+
+Strictness analysis possibly benefits from the same improvements to \letdnsc analysis strategy, which would be interesting to pursue.
+Shattering the Demand Analyser in its three parts (usage, strictness, constructed product result analysis) sketched in \cref{sec:untangle} seems worthwhile from a perspective of software engineering and could also lay the ground work for integrating the graph-based data-flow iteration approach.
+
+Lastly, we feel like there needs to be held a discussion about what the arity analyser should compute.
+Some GHC comments contradict each other in the details of what \hsinl{idArity} is really supposed to mean:
+There's the notion of `does essentially no work until applied to \hsinl{idArity} arguments' (in the haddock of \hsinl{ArityInfo}) \vs `We want expressions returning one-shot lambdas to have arity one' (Note `One-shot lambdas' in \hsinl{CoreArity}).
+Either approach seems fine to us, but documentation should be clear about it, and possibly integrate usage information directly instead of one-shot annotations only.
+We anticipate some advantages in looking at the usage of a binder:
+The example in Note `Arity analysis' in \hsinl{CoreArity} would not need any fixed-pointing to figure out that \hsinl{f} has arity 2; this property seems entirely specific to how many arguments \hsinl{f} is applied to within its scope, a typical usage property.
+E.g., a usage analysis would compute the dreaded fixed-point to find out a usage of $\omega*C^\omega(C^1(U))$, based on which the arity analyser could compute the arity based on the arity expansion procedure in \cref{sec:expand}.
+Of course, even without messing about with usage information, the arity analyser aggregates more than enough heuristic concern (\eg if an \hsinl{exprIsCheap} enough to arity expand over) to justify its existence.
+
+Hence, cutting out any logic in the arity analyser that computes usage information seems like a good idea to reduce intellectual and runtime cost of the analysis (though it's arguably rather cheap anyway).
