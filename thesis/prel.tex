@@ -165,6 +165,48 @@ While this starts out as a rather manageable analysis, GHC's arity analysis is m
 
 In the above example, GHC would consider the \hsinl{if} expression matching on a variable cheap to duplicate and thus expand \hsinl{f}'s arity (by $\eta$-expanding its bound expression) to two.
 
+\section{Worker/Wrapper Transformation}\label{sec:ww}
+
+Discussing a transformation in a chapter that is all about analyses seems out of place, but we refer to the worker/wrapper transformation quite often and this seems like the best place to sketch out its idea.
+A detailed treatment can be found in \textcite{ww}.
+
+Consider the following function and its usage:
+\begin{haskellcode}
+  f (a, b) = 
+    <large body mentioning b>
+
+  main = print (f (4, 5))
+\end{haskellcode}
+
+There is some useless packing and unpacking the pair involved in calling \hsinl{f}:
+After all, \hsinl{f} doesn't use the first component of the argument at all!
+
+If \hsinl{f} can be inlined, this packing/unpacking immediately gets optimised away by the simplifier, as \hsinl{a} is not mentioned anywhere in the body of \hsinl{f}.
+
+If \hsinl{f} cannot be inlined (it may be recursive or its body too big), then the compiler has to leave the call site untouched.
+That's a shame, since the repeated boxing and unboxing performs needless allocation, which especially hurts in hot loops.
+
+The common solution to this problem is to apply a worker/wrapper split to the function:
+\begin{haskellcode}
+  f (a, b) = 
+    $wf b
+
+  $wf b =
+    <large body mentioning b>
+
+  main = print (f (4, 5))
+\end{haskellcode}
+
+This makes \hsinl{f} only a thin \emph{wrapper} over the actual \emph{worker} function \hsinl{$wf}, which only takes those components of the pair it really uses (\hsinl{b}, that is).
+Now, \hsinl{f} is really cheap and will always be inlined at call sites, so the needless boxing and unboxing vanishes.
+Effectively, the inlinable wrapper exposes a specialised \emph{calling convention} for the worker function.
+
+This works even in the face of recursion, where the wrapper can be inlined within the body of the worker to reduce allocations.
+
+The worker/wrapper transformation is paramount to performance in a non-strict language like Haskell. 
+In order to justify unboxing primitives like machine integers (which can be treated like 1-tuples), a strictness analysis must approve the strictness in the argument to unbox.
+Without this transformation and its interplay with strictness, GHC could never reach performance within the same magnitude as C.
+
 \section{Call Arity}\label{sec:callarity}
 
 Call Arity \parencite{callarity}, as implemented in GHC, is a carefully crafted analysis with the single goal of making \hsinl{foldl} take part in list fusion without compromising in terms of allocations.
