@@ -220,7 +220,7 @@ Thus, the interleaving of sharing and arity analysis within Call Arity makes sen
 
 In order for Call Arity to have available the minimum call arity of an identifier when analysing its bound expression, it has to analyse \hsinl{let} from the bottom up, \eg analyse the body before the bound expression.
 
-This is has limitations in cases like this:
+This has limitations in cases like this:
 \begin{haskellcode}
   let x = ...
   in let y = 2*x
@@ -354,7 +354,7 @@ Things look different for thunks, though:
 \end{haskellcode}
 
 Unleashing \hsinl{y}'s \emph{usage type}, comprised of free variable usages and usage signature, at the evalation sites \letdnsc-style suggests that \hsinl{x} is evaluated twice.
-That is not the case, because the reduction to WHNF of \hsinl{f}'s bound expression will be shared, thus \hsinl{x} is actually single-entry.
+That is not the case, because the reduction to WHNF of \hsinl{y}'s bound expression will be shared, thus \hsinl{x} is actually single-entry.
 
 In order not to lose precision, thunks are analysed after the usage they are exposed to is collected from analysing the body of the binding \hsinl{let} expression.
 This bottom-up approach is backwards compared to how functions are treated (\eg bound expression before body) and is embodied in the \letupsc rule.
@@ -369,13 +369,14 @@ We will attempt to provide insight into how information flows between strictness
   \centering
   \begin{tikzpicture}[shorten >=1pt,x=10em,y=5em,auto]
     \tikzset{every loop/.style={looseness=4}}
-    \tikzstyle{n}=[draw,shape=ellipse]
-    \node (usage) at (0,1) [n] {Usage};
-    \node (strict) at (1,1) [n] {Strictness};
-    \node (cpr) at (2,1) [n] {CPR};
-    \node (ww) at (1,0) [n] {Worker/Wrapper};
-    \node (simp) at (1,2) [n] {Simplifier};
-    \node (prep) at (0,2) [n] {CorePrep};
+    \tikzstyle{a}=[draw,shape=ellipse]
+    \tikzstyle{t}=[draw,shape=rectangle]
+    \node (usage) at (0,1) [a] {Usage};
+    \node (strict) at (1,1) [a] {Strictness};
+    \node (cpr) at (2,1) [a] {CPR};
+    \node (ww) at (1,0) [t] {Worker/Wrapper};
+    \node (simp) at (1,2) [t] {Simplifier};
+    \node (prep) at (0,2) [t] {CorePrep};
     \path[dashed,->,line width=1pt] 
       (usage) edge node {} (strict);
     \path[->,line width=1pt] 

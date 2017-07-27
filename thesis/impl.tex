@@ -1,7 +1,8 @@
 \chapter{Implementation}\label{sec:impl}
 
 This chapter is concerned with the implementation of a usage analysis as specified in \cref{sec:spec} within the Glasgow Haskell Compiler (GHC).
-Changes are scattered over a huge number of files, so the \cref{app:code} only lists the main analysis \texttt{compiler/simplCore/UsageAnalysis/Analysis.hs}, which is a fork of the subsumed Call Arity analysis.
+Changes are scattered over a huge number of files, so the implementation is only available at \url{https://github.com/sgraf812/ghc} under the branch \texttt{cocall-full}\footnote{And of course in the medium attached to the submission.}.
+The main analysis file can be found in \texttt{compiler/simplCore/UsageAnal/Analysis.hs}, which is a fork of the subsumed Call Arity analysis.
 
 A detailed walkthrough of the Haskell code is out of scope and would not be particularly interesting, so we will instead discuss design decisions and interesting problems we encountered.
 
@@ -464,9 +465,9 @@ This is best understood by a simple example which already exhibits quite a compl
 
   \newcommand{\fw}[1]{\overrightarrow{#1}}
   \newcommand{\bw}[1]{\overleftarrow{#1}}
-  \begin{figure}[h]
+  \begin{figure}
     \centering
-    \begin{tikzpicture}[shorten >=1pt,x=7em,y=7em,auto]
+    \begin{tikzpicture}[shorten >=1pt,x=10em,y=7em,auto]
       \tikzset{every loop/.style={looseness=4}}
       \tikzstyle{n}=[draw,shape=circle,minimum size=5em,inner sep=0pt]
       \tikzstyle{root}=[n,fill=myred]
@@ -479,20 +480,25 @@ This is best understood by a simple example which already exhibits quite a compl
       \node (fac1) at (1.5,0) [down] {$(\hsinl{fac}, C^1(U))$};
       \node (facn) at (1,1) [down] {$(\hsinl{fac}, U)$};
       \path[->,line width=1pt] 
-        (root) edge node {$\fw{1}$} (let1)
-        (let1) edge [loop above] node {2} ()
-               edge node {$\fw{3}$} (let2)
-               edge node {} (facn)
+        (root) edge node {$\fw{1},\bw{12},\bw{20}$} (let1)
+        (let1) edge [loop above] node {$\fw{2},\bw{2},\bw{19}$} ()
+               edge node {$\fw{3},\bw{9}$} (let2)
+               edge node {$\fw{9},\bw{11},\bw{18}$} (facn)
         (let2) edge node {$\fw{4},\bw{8}$} (main)
-        (main) edge node {$\fw{5},\bw{7}$} (fac1)
-        (facn) edge node {} (fac1)
-        (fac1) edge [loop below] node {$\fw{6},\bw{6}$} ();
+        (main) edge node {$\fw{5},\bw{7},\bw{17}$} (fac1)
+        (facn) edge node {$\fw{10},\bw{10},\bw{16}$} (fac1)
+        (fac1) edge [loop below] node {$\fw{6},\bw{6},\bw{14},\bw{15}$} ();
     \end{tikzpicture}
-    \caption{Relevant part of the data-flow framework for the \hsinl{fac} example. The module node is drawn in red, \letupsc nodes are blue and \letdnsc nodes are green.}
+    \caption{
+       Relevant part of the data-flow framework for the \hsinl{fac} example. 
+       The module node is drawn in red, \letupsc nodes are blue and \letdnsc nodes are green.
+       Edge labels correpond to which step in the list below the edge is traversed during analysis.
+     }
     \label{fig:framework}
   \end{figure}
 
-  \todo{Maybe annotate the graph with numbers for the steps we are in}
+  During the depth-first discovery of nodes, forward edge labels correspond to discovering (`calling') a node and backward edge labels go in the reverse direction of the edge, \eg finishing the target node.
+  After the initial depth-first phase, the worklist algorithm takes over, iterating unstable nodes and propagating changes in reverse direction of data dependencies, thus after step 12 there are only backward labels.
 
   The iteration algorithm will start with iterating the \hsinl{TransferFunction} of the module expression, represented by the red node, under use $U$ and then proceed in the following order:\footnote{Note that we effectively \hsinl{uncurry} our transfer function from \cref{sec:transfer}, turning something of type $\sExp \to \sUse \to \sUType$ into something of type $\sExp \times \sUse \to \sUType$. Thus, \hsinl{TransferFunction} transfers expressions into the domain of usage types instead of usage transformers (see \cref{sec:mono} on impliciations for monotonicity).}
 
@@ -546,7 +552,7 @@ This is best understood by a simple example which already exhibits quite a compl
     \item
       $(\hsinl{fac}, C^1(U))$ has the higher priority, so it is iterated first.
       This results in a more precise usage type of $\lTriple{\{\hsinl{fac}, \hsinl{fac}\}}{\maplit{\hsinl{fac}}{U}}{\top}$.
-      The change marks the referrers $(\hsinl{fac}, C^1(U))$, $(\hsinl{fac}, U)$ and $(\hsinl{main}, U)$unstable.
+      The change marks the referrers $(\hsinl{fac}, C^1(U))$, $(\hsinl{fac}, U)$ and $(\hsinl{main}, U)$ unstable.
     \item
       After one more iteration, $(\hsinl{fac}, C^1(U))$ is deemed stable.
       Although irrelevant, the annotated expression stayed the same.
@@ -566,7 +572,7 @@ This is best understood by a simple example which already exhibits quite a compl
       Finally, the $(\hsinl{root}, U)$ node is iterated and marked as changed because of annotations in sub-expressions.
       That however does not mark any referrer as unstable, since there are none.
     \item
-      The algorithm returns current stable graph as a map from nodes to results.
+      The algorithm returns the current stable graph as a map from nodes to results.
   \end{enumerate}
 
   The infiniteness of the graph surfaces at the two different nodes for \hsinl{fac}:
@@ -597,9 +603,11 @@ To be more precise, the transfer function is more accurately described by the ty
 Where does this bite?
 Well, we relied on monotonicity in our argument for proving existence of the fixed-point.
 Of course, \hsinl{uncurry}ing didn't change the actual semantics, but modeling each point separately means that prior to reaching the fixed-point, there are unstable intermediate approximations which are not monotone.
-It turns out that convergence depends even on these unstable approximations to be monotone, because there are expressions which diverge otherwise:
+It turns out that convergence depends even on these unstable approximations to be monotone.
 
-\todo{Reproduction}
+This is easy to reproduce by removing all mentions of the \hsinl{monotonize} function from the main analysis module and then running the test \texttt{joao-circular} with a \texttt{devel2} flavored build of the compiler.
+The file \texttt{Visfun\_Lazy.hs} will violate a monotonicity check.
+Unfortunately, that file is rather huge and convoluted, so a detailed analysis is out question.
 
 \section{Hacking on GHC}
 
