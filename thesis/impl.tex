@@ -18,7 +18,7 @@ The representation as a lambda calculus allows simplification based on term rewr
 Functional languages encourage composition of concise definitions, so GHC supports its optimisations with an aggressive inliner.
 
 Apart from the simplifier, GHC employs other transformations which rely on precise information made available by analyses like GHC's Demand Analyser and Call Arity.
-While the Demand Analyser combines strictness analysis \parencite{dmd} with a usage analysis \parencite{card} and constructed product result analysis \parencite{cpr}, Call Arity is an arity analysis interleaved with a sharing analysis based on co-call graphs, to find out which bindings can be $\eta$-expanded without losing any shared work \tod{move this elsewhere?}.
+While the Demand Analyser combines strictness analysis \parencite{dmd} with a usage analysis \parencite{card} and constructed product result analysis \parencite{cpr}, Call Arity is an arity analysis interleaved with a sharing analysis based on co-call graphs, to find out which bindings can be $\eta$-expanded without losing any shared work.
 
 As is the case for Demand Analysis and Call Arity, our usage analysis will operate on and annotate GHC Core expressions.
 

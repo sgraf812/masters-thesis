@@ -4,7 +4,7 @@
 
 % binding correction (BCOR) von 1cm für Leimbindung
 \KOMAoptions{BCOR=1cm}
-\KOMAoptions{draft=yes}
+\KOMAoptions{draft=no}
 
 \usepackage[utf8]{inputenc} % encoding of sources
 \usepackage[T1]{fontenc}
@@ -13,12 +13,12 @@
 \usepackage{stmaryrd}
 \usepackage{xspace}
 
-\title{Merging Call Arity into Demand Analysis}
+\title{Call Arity vs.\\Demand Analysis}
 \author{Sebastian~Graf}
 \thesistype{Masterarbeit}
 \zweitgutachter{Prof.~Dr.~rer.~nat.~Bernhard~Beckert}
 \betreuer{Dipl.-Inform.~Denis~Lohner}
-\coverimage{4665389330_d09f3d6b75_z.jpg}
+\coverimage{fig/combined.png}
 
 % https://tex.stackexchange.com/a/268475/52414
 \newlength\stextwidth
@@ -48,10 +48,34 @@
 \end{center}
 \vfill
 
-Lorem german
+  Der Glasgow Haskell Compiler (GHC) bemüht ein Ensemble von Analysen um seine Optimierungen zu befeuern.
+
+  Zentraler Bestandteil ist der Demand Analyser:
+  Neben Striktheitsresultaten liefert eine verzahnte Usage Analyse Antworten auf Fragen bezüglich maximaler Kardinalität.
+  Die so identifizierten single-entry Thunks, one-shot Lambdas und toten Deklarationen werden von einer Reihe nachgeschalteter Transformationen verwertet.
+
+  Außerdem gibt es noch Call Arity, eine Analyse, die Deklarationen basierend auf Usage Informationen $\eta$-expandiert.
+  Call Arity verzahnt eine Arity Analyse mit einer Sharing Analyse um $\eta$-Expansion von single-entry Thunks zu rechtfertigen.
+
+  Die Analysen operieren unabhängig voneinander, obwohl beide ähnliche Fragen beantworten müssen.
+  Diese Arbeit befasst sich damit, ob ein Informationsfluss zwischen beiden Analysen möglich und sinnvoll ist.
+  Tatsächlich ist es sogar möglich, beide Analysen verlustfrei zu vereinen. 
+  Allerdings waren dazu einige Probleme im Bezug auf Iterationsreihenfolge und der verwendeten Verbände zu lösen.
+
 \vfill
 
-Lorem english
+  The Glasgow Haskell Compiler (GHC) integrates a number of analyses to fuel its optimizations.
+
+  Of vital importance is GHC's Demand Analyser: Besides gathering strictness information, an interleaved usage analysis answers questions about maximum cardinality.
+  The identified single-entry thunks, one-shot lambdas and absent bindings are exploited in subsequent transformations.
+
+  There is also Call Arity, an analysis trying to $\eta$-expand bindings based on usage information. 
+  Call Arity interleaves an arity analysis with a sharing analysis to justify $\eta$-expansion of single-entry thunks.
+
+  The analyses operate independent from another, while both answer related questions about usage. 
+  This thesis is concerned with assessing if an information flow between analyses would be beneficial and whether they could even be combined into a single analysis. 
+  The latter is the case, but there were some problems to be solved with respect to iteration order and correspondence of analysis domains.
+
 \vfill
 
 \end{abstract}

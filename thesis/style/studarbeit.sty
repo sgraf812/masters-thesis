@@ -39,8 +39,8 @@
 \fancyfoot[LE,RO]{\thepage}
 
 \definecolor{todo}{rgb}{0.8,0,0}
-\newcommand\tod[1]{\textcolor{todo}{TODO: #1}\PackageWarning{TODO:}{#1!}}
-\newcommand\todo[1]{\textcolor{todo}{TODO: #1}\PackageWarning{TODO:}{#1!}\par}
+%\newcommand\tod[1]{\textcolor{todo}{TODO: #1}\PackageWarning{TODO:}{#1!}}
+%\newcommand\todo[1]{\textcolor{todo}{TODO: #1}\PackageWarning{TODO:}{#1!}\par}
 
 \bibliography{bib}
 
@@ -59,11 +59,6 @@
 }}
 
 \recalctypearea % necessary if e.g. somebody changes fonts
-
-%%% cleverref customization %%%
-
-\crefname{table}{table}{tables}
-\Crefname{table}{Table}{Tables}
 
 %%% Haskell listings %%%
 
@@ -149,7 +144,7 @@
       \node[below=0.75cm of prename.south] (name)     { \Large{}\textbf{\theauthor} };
       \node[below=0.8cm  of name.south]    (postname) { an der Fakultät für Informatik };
 
-      \node[below=0.5cm  of postname.south] (bildchen) { \includegraphics[width=0.6\textwidth]{fig/combined.png} };
+      \node[below=0.5cm  of postname.south] (bildchen) { \includegraphics[width=0.6\textwidth]{\thecoverimage} };
 
       \node[below=0.4cm of bildchen.south] (table)
       {
