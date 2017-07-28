@@ -70,15 +70,15 @@ This is exactly the notion of usage-interval analysis in \textcite[chapter~5]{se
 
 \subsection{Strictness Analysis}\label{sec:strict}
 
-Analogous to the distinction of alias analyses between \MayAlias and \MustAlias in typical imperative languages, cardinality analysis can be split in two separate passes:
-\MinCard and \MaxCard. Looking at the \MinCard problem, the only information that is exploited by compilers so far is that of \emph{strictness}.
+Analogous to the distinction of alias analyses between \MayAlias and \MustAlias in typical imperative languages, cardinality analysis can be split in two separate passes, \MinCard and \MaxCard. 
+Looking at the \MinCard problem, the only information that is exploited by compilers so far is that of \emph{strictness}.
 
 An expression \hsinl{... let x = e in body ...} is strict in the binding \hsinl{x} if the whole expression diverges whenever \hsinl{e} does.
 Put another way: 
 If an expression is \emph{strict} in some binding \hsinl{x}, the expression will certainly evaluate \hsinl{x} on all code paths, \eg \hsinl{x} is evaluated at least once.
 
 Finding out whether or not a binding is evaluated at least once, relative to a single evaluation of the binding expression, is the goal of \emph{strictness analysis}.
-Strictness analysis enables the call-by-value optimisations explained above and caters for the worker/wrapper transformation \parencite{ww}.
+Strictness analysis enables the call-by-value optimisations explained above and caters for the worker/wrapper transformation \parencite{ww}, sketched out in \cref{sec:ww}.
 
 Note that from a \MinCard perspective, there is at least one more bit of information that would also be of interest, namely if a binding is evaluated \emph{at least multiple times} (\eg annotation $[\omega,\omega]$).
 There is no real gain for compilers in knowing that information!
@@ -118,7 +118,7 @@ This is best understood by an
   As the work of evaluating the expression bound to \hsinl{f} to WHNF (which it trivially has) is shared between the two calls to the lambda.
 
   It is different for the inner lambda, binding \hsinl{y}, however.
-  In each of the two calls, the result of applying \hsinl{f} to one argument is immediately applied to another argument. The redexes $f 1$ and $f 2$ represent the relative evaluations here and in each the case the resulting lambda is called once.
+  In each of the two calls, the result of applying \hsinl{f} to one argument is immediately applied to another argument. The redexes \hsinl{f 1} and \hsinl{f 2} represent the relative evaluations here and in each case the resulting lambda is called once.
   
   Thus, the lambda which binds \hsinl{y} is one-shot.
 \end{example}
@@ -133,8 +133,8 @@ Recognising one-shot lambdas opens up opportunities for a number of further opti
     Although the inner lambda (\hsinl{y}) is one-shot, the outer isn't.
   \item[$\eta$-expansion]
     Instead of floating \hsinl{let} bindings (and other syntactic things) inside a one-shot lambda, we can go the other way and float inner one-shot lambdas \emph{out}.
-    This process is called $\eta$-expansion, as opposed to $\eta$-reduction.
-    $\eta$-expansion is not generally safe for ordinary lambdas for the same reasons as floating \hsinl{let} bindings in, \eg duplicating work.
+    This process is called $\eta$-\emph{expansion}, as opposed to $\eta$-reduction.
+    $\eta$-expansion is not generally safe for ordinary lambdas for the same reasons as floating \hsinl{let} bindings in is not, \eg possible duplication of work.
 
     $\eta$-expansion based on usage information is the key idea behind the efforts of \textcite{callarity} of making \hsinl{foldl} a good consumer for list fusion.
   \item[Inlining]
@@ -143,7 +143,7 @@ Recognising one-shot lambdas opens up opportunities for a number of further opti
 \end{description}
 
 All these opportunities boil down to the compiler being cautious not to duplicate work when shoving something under a lambda.
-It seems reasonable to annotate one-shot lambdas while performing usage analysis as the information falls off as a byproduct anyway.
+It seems reasonable to annotate one-shot lambdas while performing usage analysis as the information falls off as a by-product anyway.
 
 \subsection{Arity Analysis}\label{sec:arity}
 
@@ -163,7 +163,7 @@ The simplest possible arity analysis would just count the leading chain of lambd
 Here, \hsinl{f} has manifest arity 1.
 While this starts out as a rather manageable analysis, GHC's arity analysis is much more involved, having to deal with coercions, instrumentation and cost models.
 
-In the above example, GHC would consider the \hsinl{if} expression matching on a variable cheap to duplicate and thus expand \hsinl{f}'s arity (by $\eta$-expanding its bound expression) to two.
+In the above example, GHC would consider the \hsinl{if} expression matching on a variable cheap to duplicate and thus \emph{expand} \hsinl{f}'s \emph{arity} (by $\eta$-expanding its bound expression) to two.
 
 \section{Worker/Wrapper Transformation}\label{sec:ww}
 
@@ -178,7 +178,7 @@ Consider the following function and its usage:
   main = print (f (4, 5))
 \end{haskellcode}
 
-There is some useless packing and unpacking the pair involved in calling \hsinl{f}:
+There is some pointless packing and unpacking involved in calling \hsinl{f} with the pair literal:
 After all, \hsinl{f} doesn't use the first component of the argument at all!
 
 If \hsinl{f} can be inlined, this packing/unpacking immediately gets optimised away by the simplifier, as \hsinl{a} is not mentioned anywhere in the body of \hsinl{f}.
@@ -186,7 +186,7 @@ If \hsinl{f} can be inlined, this packing/unpacking immediately gets optimised a
 If \hsinl{f} cannot be inlined (it may be recursive or its body too big), then the compiler has to leave the call site untouched.
 That's a shame, since the repeated boxing and unboxing performs needless allocation, which especially hurts in hot loops.
 
-The common solution to this problem is to apply a worker/wrapper split to the function:
+The common solution to this problem is to apply a \emph{worker/wrapper split} to the function:
 \begin{haskellcode}
   f (a, b) = 
     $wf b
@@ -204,7 +204,7 @@ Effectively, the inlinable wrapper exposes a specialised \emph{calling conventio
 This works even in the face of recursion, where the wrapper can be inlined within the body of the worker to reduce allocations.
 
 The worker/wrapper transformation is paramount to performance in a non-strict language like Haskell. 
-In order to justify unboxing primitives like machine integers (which can be treated like 1-tuples), a strictness analysis must approve the strictness in the argument to unbox.
+In order to justify unboxing primitives like machine integers (which can be treated like 1-tuples), a strictness analysis must approve the strictness in the (generally lifted) argument to unbox.
 Without this transformation and its interplay with strictness, GHC could never reach performance within the same magnitude as C.
 
 \section{Call Arity}\label{sec:callarity}
@@ -234,7 +234,7 @@ This would be all there is to arity expansion (\eg $\eta$-expansion of the bound
 \end{haskellcode}
 
 This computes the same expression as the previous example, but has different operational behavior.
-Since \hsinl{f} is now a thunk (\eg binds an expression that is not in WHNF), expanding \hsinl{f} to call arity (minimum arity of each call), which is two, duplicates the work associated with evaluating \hsinl{expensive}, which would otherwise be shared between the two calls.
+Since \hsinl{f} is now a thunk (\eg binds an expression that is not in WHNF), expanding \hsinl{f} to \emph{call arity} (the minimum arity of each call), which is two, duplicates the work associated with evaluating \hsinl{expensive}, which would otherwise be shared between the two calls.
 
 It is safe to $\eta$-expand thunks to call arity if they are just called once, though:
 \begin{haskellcode}
@@ -245,7 +245,7 @@ It is safe to $\eta$-expand thunks to call arity if they are just called once, t
   in f 1 2
 \end{haskellcode}
 
-Thus, Call Arity tracks in its abstract domain for each binder whether it was just called once and the minimum arity of each call (call arity).
+Thus, Call Arity tracks in its abstract domain for each binder whether it was just called once and the call arity (as in minimum arity of each call).
 The `called once' part is tracked by a sharing analysis, while call arity is just computed by a simple arity analysis.
 
 As the examples demonstrate, the arity analysis leans on the sharing analysis.
@@ -305,7 +305,7 @@ GHC's approach to strictness and usage analysis is that of \emph{demand analysis
 
 It is what we referred to as a cardinality analysis (\cref{sec:card}), integrating both \MinCard and \MaxCard analyses.
 To make matters more confusing, the part concerning usage analysis is introduced in \textcite{card}, titled `Modular, Higher-order Cardinality Analysis in Theory and Practice'.
-Later chapters refer to the usage analysis as implemented in GHC's Demand Analyser as Cardinality Analysis in title case, to disambiguate it from the notion of cardinality anaysis in \cref{sec:card}.
+Later chapters refer to the usage analysis as implemented in GHC's Demand Analyser as Cardinality Analysis, in title case, to disambiguate it from the notion of cardinality anaysis in \cref{sec:card}.
 
 On top of producing cardinality results, the Demand Analyser also performs \emph{constructed product result analysis} (CPR) \parencite{cpr}. 
 The details are irrelevant to this work, but it deserves mention as we will see later.
@@ -349,7 +349,7 @@ This results in a call usage of $1*C^1(C^\omega(U))$, reflecting that \hsinl{f} 
 
 Call uses would be enough to identify one-shot lambdas.
 Inspired by the preceding absence analysis, \textcite{card} however also introduced \emph{product uses} to track absence of parts of a structure.
-This is so that the worker/wrapper transformation can expose specialised calling conventions as an inlinable wrapper function, while the worker itself might not be inlinable for different reasons.
+This is so that the worker/wrapper transformation can expose specialised calling conventions as an inlinable wrapper function (see \cref{sec:ww} for details), while the worker itself might not be inlinable for different reasons.
 
 Consider the following \hsinl{funny} function:
 \begin{haskellcode}
@@ -400,11 +400,11 @@ That is not the case, because the reduction to WHNF of \hsinl{y}'s bound express
 
 In order not to lose precision, thunks are analysed after the usage they are exposed to is collected from analysing the body of the binding \hsinl{let} expression.
 This bottom-up approach is backwards compared to how functions are treated (\eg bound expression before body) and is embodied in the \letupsc rule.
-Call Arity uses an \letupsc-style approach for all bindings, because it isn't concerned with unleashing usage signatures at call sites.
+Call Arity uses a \letupsc-style approach for all bindings, because it isn't concerned with unleashing usage signatures at call sites.
 
 \subsection{Untangling Analyses}\label{sec:untangle}
 
-Demand Analysis as implemented in GHC integrates three interdependent analyses.
+Demand Analysis, as implemented in GHC, integrates three interdependent analyses.
 We will attempt to provide insight into how information flows between strictness, usage and constructed product result analysis, as well as which other parts of the compiler depend on the produced information.
 
 \begin{figure}[h]
@@ -434,33 +434,33 @@ We will attempt to provide insight into how information flows between strictness
   \label{fig:dmd}
 \end{figure}
 
-\Cref{fig:dmd} references the three analyses in question as well as the transformations which access the analysis results.
+\Cref{fig:dmd} references the three analyses in question, as well as the transformations which access the analysis results.
 
 Usage analysis, as this thesis will prove, is pretty much a stand-alone analysis; we only rely on arity results from a prior arity analysis (part of GHC's simplifier) to be present to distinguish thunks (which have arity zero) from functions.
 
 The dashed line between usage analysis and strictness analysis indicates that there probably is some kind of information flow, like in the form of absence information. 
-It is hard to tell, because the interactions between usage and strictness lattice in \texttt{utils/Demand.hs} are quite convoluted.
+It is hard to tell, because the interactions between usage and strictness lattice in the \hsinl{Demand} module are quite convoluted.
 
-Other than that, constructed product result analysis relies on strictness results to be present, as can be reproduced by following the GHC Note\footnote{Notes are a documentation idiom in widespread use within GHC, to be able to refer to explanations by a title and reduce duplicate inline documentation.} `CPR Example' in \texttt{stranal/DmdAnal.hs}.
+Other than that, constructed product result analysis relies on strictness results to be present, as can be reproduced by following the GHC Note\footnote{Notes are a documentation idiom in widespread use within GHC, to be able to refer to explanations by a title and reduce duplicate inline documentation.} `CPR Example' in the \hsinl{DmdAnal} module.
 
 Absence, strictness and constructed product results are the key ingredients for the worker/wrapper transformation \parencite{ww}.
 GHC's simplifier uses one-shot annotations on lambdas for a multitude of optimisations outlined earlier in \cref{sec:usage}.
-Single-entry annotations are only exploited by the backend, after the Core-to-Core-pipeline, which is represented by the CorePrep pass in \cref{fig:dmd}.\medskip
+Single-entry annotations are only exploited by the backend, after the Core-to-Core-pipeline, which is represented by the \hsinl{CorePrep} pass in \cref{fig:dmd}.\medskip
 
 We initially tried to integrate Call Arity into the Demand Analyser, but quickly gave up on the endeavor.
 Changing the Demand Analyser has far-reaching consequences through the whole compiler and we were afraid to spend more time fixing regressions than to actually solve the core problems of this thesis outlined in the introduction.
 
-In fact, we advocate splitting up the Demand Analyser in its three subanalyses for the following reasons:
+In fact, we advocate splitting up the Demand Analyser in its three sub-analyses for the following reasons:
 \begin{description}
   \item[Complexity] 
     Stricter separation of concerns would definitely get rid of some of the complexity in demand analysis.
-    Over the years, many hacks accumulated within the implementation and the intertwining means that it is not always obvious which sub analysis is affected by them.
+    Over the years, many hacks accumulated within the implementation and the intertwining means that it is not always obvious which sub-analysis is affected by them.
     The constant context switching is also very distracting.
-    Also, \texttt{utils/Demand.hs}, which models the analysis domain, has grown quite big and complex over time.
+    Also, the \hsinl{Demand}, which models the analysis domain, has grown quite big and complex over time.
   \item[Incompatibilities]
     There are a number of hacks to make the analyses work together.
 
-    For example, there is an extra `virgin' iteration only to have stable strictness results available to do CPR analysis (For further details see the Note `Optimistic CPR in the "virgin" case' in \texttt{stranal/DmdAnal.hs}).
+    For example, there is an extra `virgin' iteration only to have stable strictness results available to do CPR analysis (For further details see the Note `Optimistic CPR in the "virgin" case' in the \hsinl{DmdAnal} module).
 
     Also the \letupsc rule is a misfit for strictness analysis.
     Strictness does not try to separate `evaluated at least once' from `evaluated multiple times` (\eg $[1,\omega]$ vs. $[\omega,\omega]$), hence accounting for thunk sharing is not needed.
@@ -468,8 +468,8 @@ In fact, we advocate splitting up the Demand Analyser in its three subanalyses f
 \end{description}
 
 There's also the issue of perfomance:
-The Demand Analyser always computes all analysis results, even if only results of one subanalysis might be needed.
+The Demand Analyser always computes all analysis results, even if only results of one sub-analysis might be needed.
 On the other hand, the repeated AST traversals if the analysis would be split up probably incur a greater performance hit than what can be gained by being able to analyse more fine-grained.
 Of course, this is all just hand-waving as long as there are no measurements.
 
-The combination of these problems lead us to carve out a standalone usage analysis that also generalises the results of Call Arity.
+The combination of these problems led us to carve out a stand-alone usage analysis that also generalises the results of Call Arity.

@@ -18,7 +18,7 @@ Also, as the number of users and language extensions grows, compiler performance
 
 GHC 7.10 shipped with two new analyses that share interesting ideas: 
 There's Call Arity \parencite{callarity}, the result of Joachim Breitner's dissertation, and a new Higher-order Cardinality Analysis \parencite{card} which integrates with the existing Demand Analyser.
-Call Arity tries to $\eta$-expand bindings based on usage information in order to make \hsinl{foldl} a good consumer for list fusion, whereas Cardinality Analysis (referring to the contributions of \parencite{card}) is concerned with identifying single-entry thunks and one-shot lambdas.
+Call Arity tries to $\eta$-expand bindings based on usage information in order to make \hsinl{foldl} a good consumer for list fusion, whereas Cardinality Analysis (referring to the contributions of \textcite{card}) is concerned with identifying single-entry thunks and one-shot lambdas.
 
 It is not safe in general to $\eta$-expand thunks, as it possibly duplicates otherwise shared work. 
 All is not lost however: It is always safe to $\eta$-expand single-entry thunks to the minimum arity of all possible calls.
@@ -31,7 +31,7 @@ Yet there are quite a number of problems that need to be solved over the course 
     Call Arity currently interleaves the co-call analysis with its own arity analysis.
     Information flows both ways, so it seems that the Demand Analyser will additionally have to integrate an arity analysis.
     Considering the complexity of the current implementation at the time of this writing (GHC 8.2) this is hardly possible.
-    Needless to say that GHC already integrates an arity analysis in the form of \texttt{CoreArity.hs}.
+    Needless to say that GHC already integrates an arity analysis in the form of its \hsinl{CoreArity} module.
   \item[Let bindings]
     Cardinality Analysis employs different analysis orders for \hsinl{let} bindings, depending on whether the bound expression is a thunk (\letupsc) or not (\letdnsc).
     The arity analysis within Call Arity relies on the fact that all calls to a binding are analysed before the bound expression is analysed to find the minimum arity of all calls.
@@ -65,14 +65,14 @@ Regarding the aforementioned list of problems:
   \item[Complexity]
     It turned out that through adopting the language of Cardinality Analysis to describe analysis results of Call Arity (\cf \cref{sec:generalise}), we could leverage the pre-existing arity analysis to handle (the bulk of) $\eta$-expansion for us.
     We also integrated co-call graphs into the analysis and measured their impact on analysis results and performance in \cref{sec:eval}.
-    Integrating the analysis directly with the Demand Analyser was considered at first, but quickly rejected because of far reaching consequences of what would have happened to be a rewrite.
+    Integrating the analysis directly with the Demand Analyser was considered at first, but quickly rejected, because of the far reaching consequences of what would have happened to be a rewrite.
     We also advocate that this was for the better from a perspective of separation of concerns as outlined in \cref{sec:untangle}.
   \item[Let bindings]
     Current analyses within GHC perform fixed-point iteration directly along the syntactic structure of the expression to analyse.
     Effectively, every analysis defines its own data-flow iteration algorithm, interleaved with actual analysis logic.
     Driven by the problems described in \cref{sec:solve} we propose a novel, graph-based iteration method that separates denoting the transfer function to syntactic elements from actually computing the fixed-point of the modelled data-flow problem.
     In doing so, we can improve precision of analysis information unleashed at call sites, approximating a polyvariadic analysis.
-    We also elaborate on the Pros and Cons of \letupsc vs \letdnsc in \textcite{card} and prove that, if it wasn't for losing shared work, \letdnsc is strictly more precise than \letupsc even in the presence of co-call graphs at the end of \cref{sec:let}.
+    We also elaborate on the Pros and Cons of \letupsc \vs \letdnsc in \textcite{card} and prove that, if it wasn't for losing shared work, \letdnsc is strictly more precise than \letupsc even in the presence of co-call graphs at the end of \cref{sec:let}.
   \item[Data structures]
     We realised that the analysis information Call Arity provides can be recovered by doing arity expansion based on usage information as explained in \cref{sec:generalise}.
     This allowed us to get rid of the interleaving of arity und sharing analysis within Call Arity, which finally led to full generalisation of both analyses.
