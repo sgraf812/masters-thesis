@@ -1,7 +1,7 @@
 \chapter{Implementation}\label{sec:impl}
 
 This chapter is concerned with the implementation of a usage analysis as specified in \cref{sec:spec} within the Glasgow Haskell Compiler (GHC).
-Changes are scattered over a huge number of files, so the implementation is only available at \url{https://github.com/sgraf812/ghc} under the branch \texttt{cocall-full}\footnote{And of course in the medium attached to the submission.}.
+Changes are scattered over a huge number of files, so the implementation is only available online at \url{https://github.com/sgraf812/ghc} under the branch \texttt{cocall-full}\footnote{And of course in the eventual submission.}.
 The main analysis file can be found in \texttt{compiler/simplCore/UsageAnal/Analysis.hs}, which is a fork of the subsumed Call Arity analysis.
 
 A detailed walkthrough of the Haskell code is out of scope and would not be particularly interesting, so we will instead discuss design decisions and interesting problems we encountered.
