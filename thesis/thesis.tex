@@ -48,32 +48,27 @@
 \end{center}
 \vfill
 
-  Der Glasgow Haskell Compiler (GHC) bemüht ein Ensemble von Analysen um seine Optimierungen zu befeuern.
+  Optimierungen in Compilern für funktionale Programmiersprachen verlassen sich auf gute Schätzungen dafür, wie oft syntaktische Konstrukte relativ zum umgebenden Kontext ausgewertet werden.
+  Eine \emph{Kardinalitätsanalyse} berechnet untere und obere Schranken für diese Auswertungsmultiplizitäten.
+  Während untere Schranken genau den Ergebnissen einer \emph{Strictness Analyse} entsprechen, berechnen \emph{Usage Analysen} obere Grenzen.
 
-  Zentraler Bestandteil ist der Demand Analyser:
-  Neben Striktheitsresultaten liefert eine verzahnte Usage Analyse Antworten auf Fragen bezüglich maximaler Kardinalität.
-  Die so identifizierten single-entry Thunks, one-shot Lambdas und toten Deklarationen werden von einer Reihe nachgeschalteter Transformationen verwertet.
+  Der Glasgow Haskell Compiler (GHC) integriert zwei Analysen, Call Arity und Demand Analysis, die beide unabhängig voneinander Usage Resultate berechnen.
 
-  Außerdem gibt es noch Call Arity, eine Analyse, die Deklarationen basierend auf Usage Informationen $\eta$-expandiert.
-  Call Arity verzahnt eine Arity Analyse mit einer Sharing Analyse um $\eta$-Expansion von single-entry Thunks zu rechtfertigen.
-
-  Die Analysen operieren unabhängig voneinander, obwohl beide ähnliche Fragen beantworten müssen.
-  Diese Arbeit befasst sich damit, ob ein Informationsfluss zwischen beiden Analysen möglich und sinnvoll ist.
-  Tatsächlich lassen sich beide Analysen sogar verlustfrei vereinen, dazu waren allerdings einige Probleme im Bezug auf Iterationsreihenfolge und verwendeter Verbände zu lösen.
-
+  Diese Arbeit stellt eine Usage Analyse vor, die ihr Gegenstück in beiden Analysen verallgemeinert.
+  Eine komplexe Analysereihenfolge hat zu einem neuartigen, graphbasierten Ansatz zur Fixpunktiteration geführt, losgelöst vom Syntaxbaum.
+  Saubere Trennung von Analyselogik und Aufbau des Datenflussnetzwerks wird durch eine eingebettete domänenspezifische Sprache gewährleistet.
+  
 \vfill
 
-  The Glasgow Haskell Compiler (GHC) integrates a number of analyses to fuel its optimizations.
+  Optimisation passes in compilers for functional languages rely on good estimates for how often some syntactic construct is evaluated relative to its enclosing context.
+  A \emph{cardinality analysis} computes lower and upper bounds to these relative evaluation multiplicities.
+  While the lower bounds correspond to the results of a \emph{strictness analysis}, the upper bounds are computed by \emph{usage analyses}.
 
-  Of vital importance is GHC's Demand Analyser: Besides gathering strictness information, an interleaved usage analysis answers questions about maximum cardinality.
-  The identified single-entry thunks, one-shot lambdas and absent bindings are exploited in subsequent transformations.
+  The Glasgow Haskell Compiler (GHC) integrates two analyses, Call Arity and Demand Analysis, that compute usage results independently of another.
 
-  There is also Call Arity, an analysis trying to $\eta$-expand bindings based on usage information. 
-  Call Arity interleaves an arity analysis with a sharing analysis to justify $\eta$-expansion of single-entry thunks.
-
-  The analyses operate independent from another, while both answer related questions about usage. 
-  This thesis is concerned with assessing if an information flow between analyses would be beneficial and whether they could even be combined into a single analysis. 
-  The latter is the case, but there were some problems to be solved with respect to iteration order and correspondence of analysis domains.
+  This thesis introduces a usage analysis that generalises its counterpart in both analyses.
+  Challenges in analysis order necessitated a novel graph-based approach to fixed-point iteration, detached from the syntax tree.
+  An embedded domain specific language cleanly separates construction of the data-flow framework from analysis logic.
 
 \vfill
 
