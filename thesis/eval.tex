@@ -25,7 +25,7 @@ The (at the time of writing most recent) GHC 8.2.1 release -- revision \texttt{0
     In addition to the changes of \varcalls, remove the co-call graph from the usage type. 
     This is equivalent to a co-call graph that only tracks self-edges and conservatively assumes the existence of all other co-call edges.
     The intention is to measure if the space and time impact of co-call graphs matters in practice.
-    Note that regressions in some cases are expected, as the baseline employs Call Arity with accurate modelling of edges in co-call graphs at least between `interesting' variables \parencite[section~3.4.1]{callarity}.
+    Note that regressions in some cases are expected, as the baseline employs Call Arity with accurate modelling of edges in co-call graphs at least between `interesting' variables \parencite[Section~3.4.1]{callarity}.
 \end{enumerate}
 
 \begin{table}
@@ -116,6 +116,36 @@ In expanding the analogue of \hsinl{f} within \texttt{dfth}, the analysis enable
 
 Apart from the very modest extreme cases, it is worth pointing out that allocation remained the same throughout all variants!
 This is extremely important for practicality of the analysis, as we will see in \cref{sec:compperf}.
+
+Although the implementation of \hsinl{foldl} contains a \hsinl{oneShot} annotation as a hint for the compiler, the same example motivating Call Arity in \textcite[Section~3.5.1]{callarity} is still $\eta$-expanded based on the results of variant \varedges:
+\begin{haskellcode}
+  let go x =
+       let r = 
+            if x == 2016
+            then id 
+            else go (x + 1)
+       in if f x 
+          then \a -> r (a + x)
+          else r
+  in go 42 0
+\end{haskellcode}
+
+GHC produces this code when compiling the expression \hsinl{sum (filter f [42..2016])}, where \hsinl{sum = foldl (+) 0} and \hsinl{foldl} is implemented in terms of \hsinl{foldr}.
+For reasons outlined by \textcite{callarity}, it is crucial for performance to $\eta$-expand \hsinl{go}, so that no closure is allocated for \hsinl{r}.
+
+Analysing the above expression under use $U$ with our variant \varedges will proceed in the following order:
+
+\begin{enumerate}
+  \item Since \hsinl{go} is exposed to an optimistic usage of $1*C^1(C^1(U))$, it will analyse \hsinl{go}'s bound expression under use $C^1(C^1(U))$.
+  \item 
+    This translates into usage of $1*C^1(U)$ on \hsinl{r}, in both branches of the \hsinl{if} expression. 
+    Notably, the \hsinl{then} branch will first peel off one layer of the one-shot call use, then analyse \hsinl{r (a + x)} under use $U$ to find out the usage of $1*C^1(U)$ on \hsinl{r}.
+    This alone would be enough evidence to $\eta$-expand \hsinl{r}.
+  \item Analysing the bound expression of \hsinl{r} in use $C^1(U)$ will expose \hsinl{go} to a usage of $1*C^1(C^1(U))$. 
+  \item After some fixpointing, \hsinl{r} gets its single-entry $1*C^1(U)$ annotation and \hsinl{go} will have an annotation of $\omega*C^\omega(C^1(U))$.
+\end{enumerate}
+
+According to our definition of $\expand_\sUsage$ in \cref{sec:generalise}, \hsinl{go}'s bound expression can be $\eta$-expanded, enabling vital further optimisations.
 
 \subsection{Instructions Executed}\label{sec:instr}
 

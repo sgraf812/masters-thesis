@@ -45,7 +45,7 @@ As is the case for Demand Analysis and Call Arity, our usage analysis will opera
 
     data Bind b 
       = NonRec b (Expr b)
-      | Rec [(b, (Expr b))]
+      | Rec [(b, Expr b)]
   \end{haskellcode}
   \caption{Part of the data types representing the syntax of GHC Core}
   \label{fig:core}
@@ -100,7 +100,7 @@ Formulating the commonly used \hsinl{foldl} as a right fold without causing unne
 Except, we can't make the same assumptions when we also want to generalise the usage analysis within the Demand Analyser.
 From a usage perspective, all bindings carry important usage information. 
 
-Because of the same challenges regarding huge constructor applications outlined in \textcite[section~3.4.1]{callarity}, co-call graphs are the time and space bottleneck of our analysis.
+Because of the same challenges regarding huge constructor applications outlined in \textcite[Section~3.4.1]{callarity}, co-call graphs are the time and space bottleneck of our analysis.
 
 While the previous co-call graph data structure is well-suited for small graphs, the representation as an unreduced union of complete and complete-bipartite graphs makes edge tests require time linear in the size of the union in the worst case. 
 Let alone the unpredictable space usage, possibly exceeding quadratic complexity for the same reason.
@@ -124,14 +124,16 @@ Such an operation is quite common in fixpointing, so exponential blowup is immin
 
 More concretely, at one point through development, space usage exceeded sixteen gigabytes for some input files, bogging down the whole development system.
 
-Hence, in order to have better guarantees about space and runtime complexity, we took inspiration in representing the common cases of sparse and dense graphs efficiently, while we made sure that edge tests were still efficient by storing the represented graph's node-indexed adjacency sets (witnessed by an isomorphism $\sGraph \simeq \sVar \to \sVar$ modulo symmetry) directly.
+Hence, in order to have better guarantees about space and runtime complexity, we took inspiration in representing the common cases of sparse and dense graphs efficiently.
+We made sure that edge tests were still efficient by storing the represented graph's node-indexed adjacency sets (witnessed by an isomorphism $\sGraph \simeq \sVar \to \mathcal{P}(\sVar)$ modulo symmetry) directly in a \hsinl{newtype} over an \hsinl{IntMap IntSet}, leaning on unique integer keys GHC assigns to variables.
 
-The representation either stores the edge set of complement graph or the graph's edge set directly.
+The representation either stores the edge set of the complement graph or the graph's edge set directly, depending on the number of edges in the graph.
 Obviously, the former exhibits better performance characteristics for dense graphs, while the latter should be favored for sparse graphs.
 
-Edge tests have become very cheap in the new data-structure, while the complexity hides in implementing the $\llub$ and $\both$ operators, which will need to flip between representations as appropriate.
-When to flip is determined based on density of the graph:
-If above a constant threshold greater than $\nicefrac{1}{2}$, the graph representation is to be flipped.
+When to flip the representation is determined based on the density of the graph:
+If the number of edges in representation exceeds a constant threshold greater than $\nicefrac{1}{2}$ times the number of potential edges, the graph representation is to be flipped.
+
+Edge tests have become very cheap in the new data structure, while the complexity hides in implementing the $\llub$ and $\both$ operators, which will need to flip between representations as appropriate.
 
 While this doesn't get rid of the potential quadratic space complexity, this tremendously helped in bringing down memory usage to more predictable figures.
 
@@ -258,7 +260,7 @@ Note that by the time we import a function, its free variable usage is uninteres
 The environments would only mention free variables which were already compiled and whose usage was conservatively approximated because of unforeseeable use sites.
 Hence the usage signature captures all important information.
 
-Now, the usage signature of an expression alone has no semantic meaning without the use it was produces under.
+Now, the usage signature of an expression alone has no semantic meaning without the use it was produced under.
 The annotated usage signature is actually a digest of the full usage transformer, approximated at three prominent points.
 From a usage signature for an incoming call use corresponding to the arity $\alpha$ (as computed by an arity analysis) of the expression, we can derive the following usage transformer:
 \[
@@ -328,11 +330,11 @@ This means we have to flag any reference to unstable points of the usage transfo
 
 Hinting at mutual recursion and recursive calls in different uses, it should have become clear that going down this route quickly becomes too complex to follow and implement. 
 That is why analyses like the Demand Analyser deliberately settled for analysing bound expressions before the body and vice versa, embodied in the \letdnsc and \letupsc rules, respectively. 
-These were discussed in \textcite[section~3.5--3.6]{card} and \cref{sec:let}.
+These were discussed in \textcite[Section~3.5--3.6]{card} and \cref{sec:let}.
 
 Another drawback is that techniques which are concerned with computing fixed-points, but are otherwise orthogonal to the analysis implemented, are intertwined with the analysis logic.
 Analysis order depending on the syntactic structure is just a minor example of this. 
-A less simple technique is that of caching of analysis results described in \textcite[section~9.2]{dmd}. 
+A less simple technique is that of caching of analysis results described in \textcite[Section~9.2]{dmd}. 
 
 All these approaches are present in every analysis within GHC (or they would benefit from them, at least) and every analysis for itself may get it wrong in a particular way, let alone the increase in cognitive complexity.
 
@@ -579,12 +581,12 @@ This is best understood by a simple example which already exhibits quite a compl
   Actually, there are many more of these nodes, but only the two points for $C^1(U)$ and $U$ are reachable from $(\hsinl{root}, U)$.
 \end{example}
 
-\textcite[section~3.6.6]{callarity} anticipates the connection of the ad-hoc analyses in GHC to data-flow problems and the possibility of a uniform solution procedure through iterating data-flow frameworks.
-This work, in particular the \texttt{utils/Worklist.hs} module, solidifies these findings and provides a rather elegant embedded domain-specific language for constructing such frameworks.
+\textcite[Section~3.6.6]{callarity} anticipates the connection of the ad-hoc analyses in GHC to data-flow problems and the possibility of a uniform solution procedure through iterating data-flow frameworks.
+This work, in particular the \hsinl{Worklist} module, solidifies these findings and provides a rather elegant embedded domain-specific language for constructing such frameworks.
 Eventually, we plan to release this module as a separate package on Hackage, after it has gone through some polishing.
 
-In a distant future, we could see becoming this kind of graph-based data-flow iteration more feasible by associating a \hsinl{FrameworkNode} with each \hsinl{CoreExpr} constructor (or rather each subexpression) to begin with.
-This would get rid of the extra book-keeping required to assign good priorities to nodes through the \hsinl{FrameworkBuilder} code, which is actually inessential to the analysis and mostly contained in \hsinl{buildAnalFramework} in \texttt{simplCore/UsageAnal/Analysis.hs}.
+We could see this kind of graph-based data-flow iteration becoming more feasible by associating a \hsinl{FrameworkNode} with each \hsinl{CoreExpr} constructor (or rather each subexpression).
+This would get rid of the extra book-keeping required to assign good priorities to nodes through the \hsinl{FrameworkBuilder} code, which is actually inessential to the analysis and mostly contained in \hsinl{buildAnalFramework} in \hsinl{UsageAnal.Analysis}.
 
 An optimisation worth implementing would be to take advantage of the boundedness of allocated \hsinl{FrameworkNode}s, through which the graph data-structure admits a mapping to a plain \hsinl{STVector}.
 Using lazy functional state threads \parencite{statethreads}, this would achieve constant time lookup and update at least for whole usage transformers.
@@ -594,7 +596,7 @@ Using lazy functional state threads \parencite{statethreads}, this would achieve
 As we outlined in \cref{sec:letrec}, monotonicity of all involved usage transformers is essential in proving existence of the fixed-point.
 \Cref{sec:approx} pointed out that approximating usage transformers in finite time is still impossible without restricting interest to a finite set of points.
 
-This lead to a data-flow framework in \cref{sec:solve} where we modeled each single point of a usage transformer as a separate node.
+This led to a data-flow framework in \cref{sec:solve} where we modeled each single point of a usage transformer as a separate node.
 We argued that this is similar to \hsinl{uncurry}ing the transfer function in \cref{sec:transfer} from $\sExp \to \sUTrans \equiv \sExp \to \sUse \to \sUType$ to $\sExp \times \sUse \to \sUType$.
 The problem with doing so is that it doesn't preserve the monotonicity of denoting usage transformers.
 
@@ -602,11 +604,11 @@ To be more precise, the transfer function is more accurately described by the ty
 
 Where does this bite?
 Well, we relied on monotonicity in our argument for proving existence of the fixed-point.
-Of course, \hsinl{uncurry}ing didn't change the actual semantics, but modeling each point separately means that prior to reaching the fixed-point, there are unstable intermediate approximations which are not monotone.
+Of course, \hsinl{uncurry}ing didn't change the actual semantics, but modeling each point separately means that prior to reaching the fixed-point, there are unstable intermediate approximations which might not be monotone.
 It turns out that convergence depends even on these unstable approximations to be monotone.
 
 This is easy to reproduce by removing all mentions of the \hsinl{monotonize} function from the main analysis module and then running the test \texttt{joao-circular} with a \texttt{devel2} flavored build of the compiler.
-The file \texttt{Visfun\_Lazy.hs} will violate a monotonicity check.
+The file \texttt{Visfun\_Lazy.hs} will violate a monotonicity check while updating the value of a framework node.
 Unfortunately, that file is rather huge and convoluted, so a detailed analysis is out question.
 
 \section{Hacking on GHC}
@@ -627,7 +629,7 @@ It took quite some time and head-scratching to nail down rewrite rules as the cu
 GHC's build system was another thing that took some time to get accustomed to.
 Especially figuring out which things needed to be rebuilt after some change and what various build settings did, took a lot of trial and error.
 Sometimes even a \texttt{make clean} wouldn't get rid of some clearly build system-related issues, leaving no choice but to do a complete fresh checkout.
-Experiences like the latter don't exactly strengthen confidence in the build system, so we look forward to see \texttt{hadrian}\footnote{\url{https://github.com/snowleopard/hadrian}} succeed.
+Experiences like the latter don't exactly strengthen confidence in the build system, so we look forward to seeing \texttt{hadrian}\footnote{\url{https://github.com/snowleopard/hadrian}} succeed.
 
-Lastly, the test and benchmark suites of GHC are quite essential in immediately crushing occasional hopes after having fixed a complicated bug by immediately confronting the developer with another regression.
+Lastly, the test and benchmark suites of GHC are quite essential in crushing occasional hopes after having fixed a complicated bug by immediately confronting the developer with another regression.
 Of course, this is a good thing for both the maturity of GHC as well as a humbling experience for the soul.

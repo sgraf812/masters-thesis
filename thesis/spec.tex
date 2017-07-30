@@ -10,17 +10,17 @@
 As we are heading towards implementation considerations in~\cref{sec:impl}, we provide a formal specification of the usage analysis in this section.
 
 Despite being massively more simple than Haskells surface syntax, GHC Core still captures many details inessential to the analysis. 
-In order to keep the mathematical formulation as concise as possible, we define the transfer function in terms of a simplified object language in \cref{sec:exp}.
+In order to keep the mathematical formulation as concise as possible, we define the transfer function in terms of a simplified language in \cref{sec:exp}.
 
 \Cref{sec:dom} introduces the lattice of \emph{usage transformers} the analysis will operate upon. 
 
-Finally, in \cref{sec:transfer} we will see how each syntactic construct of the object language can be denoted by a usage transformer through a \emph{transfer function}.
+Finally, in \cref{sec:transfer} we will see how each language construct can be denoted by a usage transformer through a \emph{transfer function}.
 
 \section{Object Language}\label{sec:exp}
 
 \begin{figure}[h]
 \begin{alignat*}{2}
-x,y,z,\sMkPair &\in \sVar \\
+x,y,z,\sMkPair,\sTrue,\sFalse &\in \sVar \\
 e &\in \sExp & {}\Coloneqq{}                    & x \\
   &          & \mathwithin{{}\Coloneqq{}}{\mid} & \sPair{x_1}{x_2} \\
   &          & \mathwithin{{}\Coloneqq{}}{\mid} & \sLam{x}{e} \\
@@ -43,14 +43,13 @@ An \keyword{if}/\keyword{then}/\keyword{else} construct will highlight how the a
 
 We draw variable names from an abstract set $\sVar$. 
 Of particular note is the identifier $\sMkPair$, which always refers to the pair constructor as a function of two arguments and may not be rebound by a \keyword{let} expression. 
+For the sake of simplicity, we mention boolean literals $\sTrue$ and $\sFalse$ as variables.
+The transfer function is unconcerned with them and can handle them like any other imported identifier.
+
 As is customary in both \textcite{card} and \textcite{callarity}, we assume A-normal form \parencite{anf}, so that arguments to applications can only mention identifiers. 
 Applications to non-trivial arguments like $\sApp{e_1}{e_2}$ must be rewritten as $\sLet{x_2 = e_2}{\sApp{e_1}{x_2}}$, hence issues concerning sharing only surface while handling \keyword{let}-expressions.
 
-Note that although there are \keyword{if} expressions, we omitted literal syntax to introduce booleans in order to keep the syntax clean. 
-Anywhere we write the literals \keyword{True} or \keyword{False}, they desugar to their church encoding $\sLam{t}{\sLam{f}{t}}$ and $\sLam{t}{\sLam{f}{f}}$, respectively.
-Our analysis is completely unconcerned by this.
-
-Most code examples will be written in a Haskell-like language anyway, rather than in this object language.
+Most code examples will be written in a Haskell-like language anyway, rather than in this stripped-down language.
 If there are code samples in object language (distinguishable by the typesetting of binders, \eg \hsinl{x} \vs $x$), they should implicitly assumed to be rewritten according to these rules.
 
 \section{Analysis Domain}\label{sec:dom}
@@ -75,7 +74,7 @@ Similarly, the second question is answered by marking thunks which have the \emp
 Absence is a matter of answering the question if a binding is used at all, \eg at most zero times.
 
 Cardinality Analysis \parencite{card} -- the usage analysis that GHC's Demand Analyser integrates -- provides answers to these questions.
-Our analysis builds on this approach in that the central lattices have been borrowed unchanged, but have been enriched and distinguished with further semantic meaning.
+Our analysis builds on this approach in that the central lattices have been borrowed, but have been enriched and distinguished with further semantic meaning.
 
 \begin{figure}
 \begin{alignat*}{2}
@@ -168,8 +167,8 @@ in let b = f 1
 If we put the expression under some use $U$, we find out the following facts by backtracing evaluation:
 
 \begin{itemize}
-\item The case binder \hsinl{y} has usage $1*U$, \hsinl{x} is absent ($A$).
-\item The usage on case binders translate to a pair use on \hsinl{(a,b)} of $U(A,1*U)$.
+\item The pattern match variable \hsinl{y} has usage $1*U$, \hsinl{x} is absent ($A$).
+\item The usage on pattern match variables translate to a pair use on \hsinl{(a,b)} of $U(A,1*U)$.
 \item The pair constructor forwards its component usages to identifier usages for \hsinl{a} ($A$) and \hsinl{b} ($1*U$).
 \item Since we recorded a usage of $1*U$ for \hsinl{b}, we put the right-hand side of the binding under use $U$. 
       One call with a single argument results in a usage of $1*C^1(U)$ on \hsinl{f}.
@@ -189,7 +188,7 @@ f 0 0 + f 1 1
 \end{haskellcode}
 
 This demonstrates how multi-call uses can be introduced. 
-A use of $U$ on the expression manifests in two sequential usages $1*C^1(C^1(U))$ of \hsinl{f}, each corresponding so a single call with two arguments. 
+A use of $U$ on the expression manifests in two sequential usages $1*C^1(C^1(U))$ of \hsinl{f}, each corresponding to a single call with two arguments. 
 These combine to an identifier usage of $\omega*C^\omega(C^1(U))$: 
 After all, the lambda expression the function bound to \hsinl{f} reduces to is called twice, resulting in two (non-shared!) values. 
 In each case, these function values are immediately called with one argument.
@@ -207,10 +206,10 @@ The expression bound to \hsinl{g} is thus used with $C^\omega(C^1(U))$. Itself b
 
 The $\sUsage$ multiplicity $n*\uscore$ represents how often a given thunk is evaluated. 
 Of course, since thunks promise that the bound expression will be reduced to WHNF at most once, after the first evaluation the value will be \emph{memoised} and returned for each subsequent evaluation of the thunk.
-As \textcite[section~2.4]{card} points out, the ritual around memoisation is superfluous if the thunk is not evaluated more than once anyway!
+As \textcite[Section~2.4]{card} points out, the ritual around memoisation is superfluous if the thunk is not evaluated more than once anyway!
 In these cases of \emph{single-entry} thunks, GHC exploits that call-by-need coincides with a leaner call-by-name evaluation strategy.
 
-As the remarks in \textcite[section~2.5]{card} point out, in a non-strict language with the \hsinl{seq} primitive, it is even possible for functions to be \emph{evaluated} multiple times, yet \emph{called} only once.
+As the remarks in \textcite[Section~2.5]{card} point out, in a non-strict language with the \hsinl{seq} primitive, it is even possible for functions to be \emph{evaluated} multiple times, yet \emph{called} only once.
 If an expression like \hsinl{seq f (f 3)} is put under use $U$, this exposes \hsinl{f} to a usage of $\omega*C^1(U)$: \hsinl{f} is evaluated multiple times, yet called only once.
 This is the same argument that \textcite[Appendix~C.2]{warnsbrough} makes with their language of \emph{use} \vs \emph{demand}.
 
@@ -296,7 +295,7 @@ in let y = 2*x
 \end{haskellcode}
 
 The co-call graph for the \hsinl{if} expression crucially \emph{does not} contain an edge \edge{x}{y}, since usages of both variables can never happen in the same evaluation of the expression.
-Knowing that \hsinl{x} is not forced together with \hsinl{y}\footnote{Prior to looking at the right-hand side of \hsinl{y} is, of course.}, we save a self-edge on \hsinl{x} after analysing the right-hand side of \hsinl{y}.
+Knowing that \hsinl{x} is not forced together with \hsinl{y}\footnote{Prior to looking at the right-hand side of \hsinl{y} is, of course.}, we avoid a self-edge on \hsinl{x} after analysing the right-hand side of \hsinl{y}.
 
 Consequently, \hsinl{x} is recognized of only being evaluated once. 
 Other usage analyses like that of GHC's Cardinality Analysis \parencite{card} only model self-loops in the underlying co-call structure (\eg usage multiplicity), so they would fail to recognize the absent edge between \hsinl{x} and \hsinl{y} and conservatively assume \hsinl{x} to be called more than once\footnote{It is worth pointing out that this is only the case for when \hsinl{y} is a thunk (\eg not in WHNF), as this imprecision pertains to the \letupsc rule of \textcite{card}. 
@@ -374,7 +373,7 @@ We will revisit this when discussing analysis of \keyword{let} bindings.
 
 \subsection{Usage transformers}\label{sec:utrans}
 
-When talking about how an expression uses its free variables, we so far always did presuming a certain use we put the expression under.
+Talking about how an expression uses its free variables makes only sense when presuming a certain use the expression is put under.
 
 To understand why, the following example is instructive:
 
@@ -503,7 +502,7 @@ Sequential composition with itself would then yield the expected $\lTriple{\left
 
 Sequential composition of usage types deserves special mention with respect to co-call graphs.
 The sequential composition of co-call graphs is basically the union of both graphs, plus the complete bipartite graph between their domains.
-Using proper graph theoretic language, this is exactly the \emph{graph join} of the two graphs, but we will refrain from calling it that way in order to not confuse it with the order theoretic least upper bound operator $\llub$ from \cref{sec:lattice} which corresponds to the \emph{graph union}.
+Using proper graph theoretic language, this is exactly the \emph{graph join} of the two graphs, but we will refrain from calling it that way in order not to confuse it with the order theoretic least upper bound operator $\llub$ from \cref{sec:lattice} which corresponds to the \emph{graph union}.
 
 We also extend the multiplicity notation of usages to usage types to mean exactly this notion of sequential composition with itself:
 \begin{alignat*}{1}
@@ -581,7 +580,7 @@ The application case $\sApp{e}{x}$ will have to handle the called expression $e$
 
 For an incoming use $u$ we put $e$ under a single call use of $C^1(u)$. 
 In the resulting usage type, we match on the usage signature to get out the argument usage $u^*$ we expose $x$ to.
-Since the domain of usage transformers is concerned with expression $\sUse$, we have to provide an function lifting the domain of usage transformers to $\sUsage$s.
+Since the domain of usage transformers is concerned with expression $\sUse$, we have to provide a function lifting the domain of usage transformers to $\sUsage$s.
 This is done by $\liftstar{\uscore}{\uscore}$:
 
 \begin{alignat*}{2}
@@ -644,7 +643,7 @@ This looks like a simpler version of the transfer function on \keyword{case} exp
 Yet the usage type of \keyword{then} and \keyword{else} branches are joined together before sequentially combining with the usage type of the scrutinee.
 For a general \keyword{case} expression, we would join analysis results of all branches together in much the same way.
 
-We primarily need \keyword{if} expressions to introduce missing edges in a co-call graph, for the sake of illustrative examples. 
+We primarily need \keyword{if} expressions for the sake of illustrative examples, with non-complete co-call graphs introduced by joining the two branches. 
 For instance, in the object language expression $\sITE{b}{t}{f}$ there will be no edge $\edge{t}{f}$ in the co-call graph.
 
 \subsection{Variables}\label{sec:var}
@@ -719,7 +718,7 @@ Resolution of \keyword{let} bindings often bears interesting design decisions of
 This analysis is no exception to that rule:
 It combines the ideas from co-call graphs \parencite{callarity} with the general approach of \textcite{card}.
 
-As pointed out in \textcite[section~3.5]{card}, on one hand, we want to unleash calls right at their use site, as if it were inlined, to have a usage signature available:
+As pointed out in \textcite[Section~3.5]{card}, on one hand, we want to unleash calls right at their use site, as if it were inlined, to have a usage signature available:
 
 \begin{haskellcode}
   let b t f = t
@@ -1071,9 +1070,9 @@ Where the dependency chain of auxiliary definitions flows upwards, \eg $\down$ c
 Let's comprehend it in exactly that order.
 
 We perform the fixed-point iteration that yields the extended transformer environment $\rho'$ first, by iterating with $\down$.
-Note that compared to \cref{sec:let}, in order to make recursion explicit and avoid mutual recursion, we had to abandon $\tau_1$ ($\tau_i$, hypothetically), the transformer denoting the bound expression.
-Instead, the definition of $\tau_1$ was inlined at its two use sites.
-Also, since fixed-point iteration potentially begins with $\bot$, we have to make sure to pass the least upper bound $\rho \llub \rho'$ to the bound expression's transfer function.
+Note that compared to \cref{sec:let}, we had to abandon $\tau_1$ ($\tau_i$, hypothetically), the transformer denoting the bound expression.
+Instead, the definition of $\tau_1$ was unfolded at its two use sites within $\down$ and $\theta_i$.
+Also, since fixed-point iteration potentially begins with $\bot$, we have to make sure to pass the least upper bound $\rho \llub \rho'$ to the bound expression's transfer function within $\down$.
 
 Given a stable transformer environment $\rho'$, we can compute the outer fixed-point of the $\up$ function.
 
@@ -1089,10 +1088,11 @@ As \textcite[102--104]{callarity} points out, one-shot recursive bindings are ra
 
 When iteration of $\up$ finally reached a fixed-point, all that remains is to strip off the identifiers from the resulting usage type.
 
-\subsubsection{Existence of the Fixed-point and Termination}\label{sec:fix}
+\subsubsection{Existence of the Fixed-point}\label{sec:fix}
 
 As noted at the begin of \cref{sec:letrec}, proofs for the existence of fixed-points in the two occurences of $\fix$ are non-trivial. 
-At the same time, a rigorous proof is out of scope for this thesis (with respect to both extent and time), so this section will just provide a short sketch.\medskip
+At the same time, a rigorous proof is out of scope for this thesis (with respect to both extent and time), so this section will just provide a sketch.
+This is so that we motivate and foreshadow implementation challenges in \cref{sec:impl}.\medskip
 
 As the Kleene fixed-point theorem states, iterating a Scott-continuous function $f \colon D \to D$ over a directed-complete partial order $(D, \lleq)$ starting at a bottom element $\bot$ always converges towards the least fixed-point:
 \[
@@ -1103,46 +1103,30 @@ By giving usage transformers the structure of a directed-complete partial order 
 
 As noted in \cref{sec:lattice}, usage transformers form a join-semilattice with least element $\uscore \mapsto \lTriple{\emptyset}{\emptymap}{\bot}$.
 For usage transformers to form a directed-complete partial order, it is enough to show completeness of the semilattice, which transitively reduces to completeness of the $\sUType$ join-semilattice and all other mentioned substructures.
-Proving completeness should be trivial in all cases.
 
-What remains to be proven is the Scott-continuity of the iterated functions $\up$ and $\down$.
-Scott-continuity implies monotonicity, but it is not obvious how $\up$ and $\down$ are even monotone.
-
-Because the $\up$ function looks up identifier usage from the usage type, monotonicity requires that a stronger usage leads to a stronger usage type unleashed by the bound expression.
-
-In other words: Monotonicity of $\up$ implies that the transfer function ranges only over \emph{monotone} usage transformers, adding to the pile of proof work to do. 
-In fact, termination bugs regarding monotonicity actually occured while realising the implementation due to the chosen data structures (\cf \cref{sec:mono}).
-
-The proof for Scott-continuity of $\up$ would follow a similar argument, so we also need to prove continuity of all usage transformers in the image of the transfer function.
-
-So, proving well-definedness of the transfer function entails quite some proof work.\medskip
-
-Well-definedness does not guarantee construction of the least fixed-point in finite time, though.
-
-The usual argument is to prove finite height of the lattice in question.
-The following strictly ascending chain proves arbitrary height $n$ for the join-semilattice of $\sUse$:
-\[
-  (C^1(\uscore))^n\,U \lless (C^1(\uscore))^{n-1}\,U \lless \ldots \lless C^1(U) \lless U
-\]
-
-However, proving the weaker ascending chain condition, also sufficient for termination, is still possible for that case.
-
-Enter pair uses. The following strictly ascending chain of arbitrary length $n$ in $\sUsage$ shatters all hopes:
+However, pair uses don't even form a directed-complete partial order, as the following arbitrarily ascending chain proves:
 \[
   A \lless 1*U(1*U, A) \lless 1*U(1*U, 1*(1*U, A)) \lless \ldots \lless (1*U(1*U,\uscore))^n\,A
 \]
 
-In practice, and that's also what the implementation of \textcite{card} within GHC does, we have to artificially bound the depth of pair uses for the analysis to terminate.
+In practice, and that's also what the implementation of \textcite{card} within GHC does, we have to artificially bound the depth of pair uses to reach a fixed-point.
 
-We will revisit this in \cref{sec:bound}, where we discuss implementation details regarding efficient approximation of usage transformers.
+We will revisit this in \cref{sec:bound}, where we discuss implementation details regarding efficient approximation of usage transformers.\smallskip
 
-Monotonicity of usage transformers is also imperative to showing the ascending chain condition for them. 
-Otherwise, there is always a chain of usage transformers that ascend at arbitrarily deep call uses.
+Postulating a directed-complete partial order on usage transformers (\eg by bounding the depth of pair uses), what remains to be proven is the Scott-continuity of the iterated functions $\up$ and $\down$.
+Scott-continuity implies monotonicity, but it is not obvious how $\up$ and $\down$ are monotone.
 
-Of course, just showing termination does not make any guarantees with respect to runtime complexity. 
+Because the $\up$ function looks up identifier usage from the usage type, monotonicity requires that a stronger usage leads to a stronger usage type unleashed by the bound expression.
+
+In other words: Monotonicity of $\up$ requires that the transfer function ranges only over \emph{monotone} usage transformers. 
+In fact, termination bugs regarding monotonicity actually occured while realising the implementation due to the chosen data structures (\cf \cref{sec:mono}).
+
+The proof for Scott-continuity of $\up$ would follow a similar argument, so we also need to prove continuity of all usage transformers in the image of the transfer function.\medskip
+
+Of course, just showing existence of the fixed-point does not imply termination, let alone any guarantees with respect to runtime complexity. 
 \Cref{sec:approx} discusses efficient approximation of usage transformers in more detail.
 
-Also, we don't even attempt a proof of safety in the style of \textcite{card} or even \textcite{callarity} and trust in benchmark results (\cf \cref{sec:eval}) to have uncovered possible problems.
+Instead of a proper proof of safety in the style of \textcite{card} or even \textcite{callarity}, we trust in benchmark results (\cf \cref{sec:eval}) to have uncovered possible problems.
 
 \section{Relationship to Call Arity and Demand Analysis}\label{sec:generalise}
 
@@ -1226,7 +1210,7 @@ That said, we generalise Cardinality Analysis in several aspects:
   \item[Unified \letupsc/\letdnsc] The strictly separated \letupsc and \letdnsc rules have been superseded by an approach that always unleashes usage signatures at call sites \letdnsc-style (also for thunks). Also, in the \letdnsc case we put the bound expression under the precise incoming use instead of digesting the bound expression for the case of a single call with manifest arity (the number of leading lambdas, that is).
   \item[Co-call graphs] We gain precision for the \letupsc case by tracking the co-call relationship (\cf \cref{sec:graph} and \cref{sec:let}).
   \item[$\sUse$ \vs $\sUsage$] We treat the \emph{usage} an identifier is exposed to separate from the \emph{use} an expression is put under. This results in a better understanding of what a \emph{one-shot} lambda is and when to utilise which domain in general.
-  \item[Ideal specification] The transfer function serving as a specification captures the essence of the analysis without leaking any implementation details, such as how approximate the usage transformers unleashed through \letdnsc are. Of course, when writing a conference paper, there are good reasons not to do so.
+  \item[Ideal specification] The transfer function serving as a specification captures the essence of the analysis without leaking any implementation details, such as how approximate the usage transformers unleashed through \letdnsc are.
 \end{description}
 
 We will revisit the issues of how approximate we want usage transformers to be in \cref{sec:approx}.

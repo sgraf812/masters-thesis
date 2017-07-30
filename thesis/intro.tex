@@ -16,13 +16,15 @@ Although GHC started out as an academic project to push the boundaries of what `
 Hence, principles such as separation of concerns and `Don't repeat yourself' (DRY) also apply to writing compilers.
 Also, as the number of users and language extensions grows, compiler performance has been an increasing woe.
 
-GHC 7.10 shipped with two new analyses that share interesting ideas: 
+GHC, as of version 8.2, ships with two analyses that share interesting ideas: 
 There's Call Arity \parencite{callarity}, the result of Joachim Breitner's dissertation, and a new Higher-order Cardinality Analysis \parencite{card} which integrates with the existing Demand Analyser.
 Call Arity tries to $\eta$-expand bindings based on usage information in order to make \hsinl{foldl} a good consumer for list fusion, whereas Cardinality Analysis (referring to the contributions of \textcite{card}) is concerned with identifying single-entry thunks and one-shot lambdas.
 
 It is not safe in general to $\eta$-expand thunks, as it possibly duplicates otherwise shared work. 
 All is not lost however: It is always safe to $\eta$-expand single-entry thunks to the minimum arity of all possible calls.
 Thus, in order for Call Arity to justify $\eta$-expansion of thunks, it has to interleave with the arity analysis its own sharing analysis based on co-call graphs \parencite{callarity} to identify said single-entry thunks.
+Edges in co-call graphs correspond to a `is possibly evaluated with' relation between variables.
+Therefore, absence of a self-edge implies that a variable is evaluated at most once, \eg is single-entry.
 
 In a perfect world, we would just integrate Call Arity's co-call graphs into Cardinality Analysis and have Call Arity access the analysis results, even if it only was for concentrating the analysis logic in one place (adhering to DRY).
 Yet there are quite a number of problems that need to be solved over the course of this thesis before we provide a unified analysis in \cref{sec:spec}:
@@ -46,7 +48,7 @@ We present a usage analysis that generalises both Cardinality Analysis \parencit
 
 After giving a broad overview over the different analyses involved in \cref{sec:zoo}, specifically Call Arity (\cref{sec:callarity}) and the Demand Analyser (\cref{sec:dmd}), we make our point for extracting the usage analysis from the Demand Analyser into a separate analysis in \ref{sec:untangle}.
 
-A formal specification of the analysis in terms of a simplified object language is given in \cref{sec:spec}.
+A formal specification of the analysis in terms of a simplified language is given in \cref{sec:spec}.
 The analysis works by abstract interpretation over a domain quite similar to that of \textcite{card}, outlined in \cref{sec:dom}.
 In \cref{sec:transfer} follows the definition of the transfer function, while we discuss how to recover Call Arity (\eg $\eta$-expansion based on usage) and Cardinality Analysis in \cref{sec:generalise}.
 
