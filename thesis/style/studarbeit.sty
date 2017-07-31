@@ -31,7 +31,7 @@
 \usepackage[bookmarks=true,pdfusetitle=true]{hyperref}
 \hypersetup{
   pdfdisplaydoctitle=true,
-  %colorlinks=true, % use this if the boxes around links bother you ;)
+  colorlinks=true, % use this if the boxes around links bother you ;)
   pdfstartpage=3,
 }
 \usepackage{hypcap} % hyperref fix
@@ -66,6 +66,7 @@
 }}
 
 \recalctypearea % necessary if e.g. somebody changes fonts
+\emergencystretch=1em % Fixing overfull hboxes in the bib
 
 %%% Haskell listings %%%
 
