@@ -47,7 +47,7 @@ There are no numbers yet to substantiate that claim, appearently because integra
 For the implementation of imperative languages, data-flow analysis on control flow graphs or directly on graph-based intermediate representations \parencite{firm} \parencite{thorin} are the norm.
 
 There's even a Haskell library for analysing and transforming control flow graphs, \texttt{hoopl}, introduced in \textcite{hoopl} and used in the C-- backend of GHC.
-On first sight, our \texttt{Worklist} module seems to be a direct contender to \texttt{hoopl} and in fact we considered to use \texttt{hoopl} for our purposes.
+On first sight, our \hsinl{Worklist} module seems to be a direct contender to \texttt{hoopl} and in fact we considered to use \texttt{hoopl} for our purposes.
 However, as we discovered the API, it became evident quickly that expressing our rather complex analysis in terms of the traditional gen/kill set terminology was quite impossible. 
 
 Thus we created our own solution to the problem, which worked out quite well for us:
