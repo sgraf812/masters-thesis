@@ -1,0 +1,280 @@
+<meta charset="utf-8" emacsmode="-*- markdown -*-">
+
+# Gliederung
+
+- Einleitung  
+  - GHC, Analysen befeuern Optimierungen
+  - Über 100k Zeilen Code, typische Software Engineering Probleme
+  - Separation of Concerns, DRY
+  - vor dem Hintergrund: Call Arity vs. Demand Analysis
+- Cardinality Analysis  
+  - Beispiel, erklären, single-entry
+  - mögliche Optimierungen
+  - Usage Analyse  
+    - Motivation für one-shot annotationen
+    - mögliche optimierungen
+  - Demand Analysis ist Kardinalitätsanalyse  
+    - Annotationen motivieren (Usage signaturen LetDn, single-entry LetUp)
+    - LetUp vs. LetDn
+- Call Arity  
+  - eta expansion basierend auf usage informationen
+  - motivierende Beispiele, um zu zeigen warum single-entry wichtig ist
+  - Verzahnt arity Analyse mit usage analyse basierend auf co-call graphen für single-entry thunks  
+    - Co-call graphen
+    - Immer LetUp
+- Eigene Arbeit (quasi Kapitel 3 und 4)
+  - Call Arity und Demand Analysis berechnen ihre eigenen Usage Informationen
+  - Eine Usage Analyse, die ihr Gegenstück in beiden Analysen verallgemeinert
+    - ersetzt Call Arity
+    - erlaubt es, die Usage Analyse aus dem Demand Analyser zu schneiden
+  - Denotiert Ausdrücke durch Usage Transformer, monotone Funktionen von Use zu UsageType
+  - ... Wie sehr in die Tiefe, und was?
+  - Eta expansion basierend auf Usage?! Vielleicht die gleichen Beispiele wie am Anfang? Vielleicht schon am Anfang erwähnen?
+- Evaluation  
+  - Eine Variante mit, eine ohne Co-call Graphen
+  - TODO: dfth nochmal ansehen, Beispiel fixen
+  - Allokationen  
+    - infer erwähnen, partial application expandiert
+    - fluid erwähnen, expanding a parsing function
+    - fft2 genauer beschreiben, Code erklären
+  - Auch Anzahl ausgeführter Instruktionen gemessen, aber bei Ausreißern keine Korrellation mit echten Änderungen gefunden (Backup)
+  - Arbeitsaufwand, kloc etc.
+- Related und Future Work?!
+- Conclusion  
+  - Analyse vorgestellt, die Call Arity und die Usage Analyse im Demand Analyser verallgemeinert
+
+
+Backup:
+- Probleme, wie gelöst
+- Feinere Unterteilung von Kardinalitätsanalysen
+- Arity Analyse
+- Product uses
+- sum (filter f [42..2016]) Beispiel, um zu zeigen wo wir uses an call sites brauchen
+- Beispiel, bei dem wir besser sind als Call Arity und Demand Analysis
+- Transferfunktionen
+
+
+
+# Introduction
+
+- Hi ... 
+- über 2 Analysen im GHC erzählen
+- Call Arity, Ergebnis von Joachims Doktorarbeit
+- Demand Analysis, eine Analyse, die sich damit beschäftigt, ob und wie oft eine Variable ausgewertet/aufgerufen wird
+
+# Motivation
+
+- Unterschied zwischen
+
+```haskell
+add1 x =
+  let expensive = ...
+  in \y -> x + y + expensive
+
+
+add2 x y =
+  let expensive = ...
+  in x + y + expensive
+
+
+main = do
+  print (add 1 2 + add 1 3)
+```
+
+- Keiner, zumindest nicht semantisch (entzuckerte Versionen)
+
+- Operational: Was passiert, wenn beide mit 2 Argumenten wie in `add 1 2` aufgerufen werden?
+- Laziness ist orthogonal, lassen wir außen vor, Annahme: `{-# LANGUAGE Strict #-}`
+- `add2 1 2`  
+  1. Nimmt beide Argumente vom Stack
+  2. Allokiert Platz und berechnet den Wert von `expensive`
+  3. berechnet das Ergebnis über primitive Addition
+- `add1 1 2`
+  1. `add1 1 2` nimmt zunächst das erste Argument vom Stack
+  2. Allokiert Platz und berechnet den Wert von `expensive`
+  3. Allokiert eine Closure für den Rückgabewert, die `expensive` und `x` umfasst
+  4. Ruft die allokierte Closure mit dem zweiten Argument auf, die das Ergebnis berechnet
+- Unnötige Allokationen sind häufig Symptom von Optimierungspotential
+- Erste Variante effizienter, attraktive Optimierung: Eta-expansion, m.a.w.: Lambda binder "nach außen ziehen"
+- Inlining (nun offensichtlich einzige Benutzung) könnte `add2` weiter vereinfachen
+- Darf man das immer?
+
+```haskell
+add1 x =
+  let expensive = ...
+  in \y -> x + y + expensive
+
+
+add2 x y =
+  let expensive = ...
+  in x + y + expensive
+
+
+main = do
+  let shared = add 1
+  print (shared 2 + shared 3)
+```
+
+- Angenommen, `expensive` ist beliebig teuer (in der Praxis möglich)
+- Wie oft wird `expensive` in `main` ausgewertet?  
+  - `add2`: Offensichtlich zweimal, obwohl beide Male mit gleichem Argument
+  - `add1`: Erst der Letgebundene Aufruf mit einem Argument, der `expensive` einmal ausführt und die Closure zurückgibt, dann zwei Aufrufe der Closure, die beide vom geteilten 
+- 1 vs. 2 => `add1` sicherlich effizienter, weil ein Aufruf durch Sharing eingespart wird
+- Das Problem hier: Der über ein let-binding geteilte Aufruf mit nur einem Argument (Call Arity 1, unbedingt klar machen)
+- Idee für eine Arity Analyse: Untersuche die Benutzungen von Funktionen wie `add`, um die minimale Anzahl an Argumenten herauszufinden  
+  - Hier wird `add` auch mit einem Argument aufgerufen, `expensive` ist also potentiell teilbar
+- Faustregel: Thunks werden nie eta-expandiert?!
+
+```haskell
+add1 x =
+  let expensive = ...
+  in \y -> x + y + expensive
+
+
+add2 x y =
+  let expensive = ...
+  in x + y + expensive
+
+
+main = do
+  let shared = add 1
+  print (shared 2)
+```
+
+- Hier wäre Expansion in Ordnung, obwohl `add` mit nur einem Argument aufgerufen wird  
+  - Die eingehende Arity durch den Aufruf von `shared` ist also auch entscheidend
+- Wie wir am vorherigen Beispiel gesehen haben gilt das allerdings nur, wenn wir sicherstellen können, dass `shared` höchstens einmal aufgerufen wird
+- Wir brauchen also für eine präzise Arity Analysis präzise Informationen über Auswertungs-/Aufrufhäufigkeiten
+- Genau das liefert eine Cardinality Analysis
+
+# Cardinality Analysis
+
+- Erkennt hier das Offensichtliche: `shared` wird genau einmal benutzt  
+  - Geht vom let binding aus
+  - Fragt, wie oft bei der einfachen Auswertung eines Ausdrucks seine freien Variablen ausgewertet werden
+  - Beispiel durchrechnen
+
+# Call Arity
+
+- Joachims Ziel war, eine bestimmte Klasse von Bindings über eta-expansion zu optimieren  
+  - Solcher Code entsteht häufig als Ergebnis von List fusion, die Listenbasierten Code in effiziente Tailcalls optimiert
+- Arity Analysen sind schon länger bekannt, die benötigten Cardinality Analysen auch
+- Problem bisheriger Analysen: Keine war präzise genug, um Aufrufhäufigkeiten bei Rekursion richtig zu bestimmen
+- (Daher Verzahnung von Arity Analyse und Kardinalitäts-Analyse, die auf Co-Call Graphen aufbaut)
+- Zusammenspiel wird in GHC als Call Arity bezeichnet
+
+```haskell
+sum n =
+  let continuation = 
+        let expensive = ...
+        in \n -> expensive + n - expensive
+
+      stop x = 
+        x > n
+
+      go x = 
+        if stop x
+        then continuation
+        else \acc -> go (x + 1) (acc + x)
+
+  in go 0 0
+```
+
+- Summe einer Liste in CPS für constant space
+- Würde so aber trotzdem allokieren! 
+- Wichtige Einsicht ist hier, dass `go` eta-expanded werden könnte
+- Damit folgt, dass auch `continuation` eta-expanded werden könnte, aber nur, wenn diese höchstens einmal ausgewertet wird  
+  - Andernfalls laufen wir Gefahr, die Berechnung von `expensive` zu duplizieren!
+- Kardinalitätsanalyse muss feststellen, dass `myId` höchstens einmal ausgewertet wird  
+  - Schwierig hier: Rekursion
+- Zentral ist die Feststellung, dass `myId` nie zusammen mit `go` aufgerufen wird! Nur so sieht man, dass `myId` nur einmal im Basisfall ausgewertet wird
+- Das wird durch Co-call Graphen erfasst  
+  - Graph mit Knoten für alle freien Variablen
+  - Kante zwischen Variable x und Variable y genau dann, wenn bei Auswertung des Ausdrucks beide Variablen aufgerufen werden *können*
+  - Schleife entspricht mehrmaligem Aufruf/Auswertung
+  - 
+- Daher gute Ergebnisse selbst bei Rekursion
+- Wichtige Eigenschaften:  
+  - Nicht higher-order, betrachtet nur lokale let bindings
+  - Verlässt sich auf den Inliner, um interprozedurale Abhängigkeiten zu erkennen
+  - Wichtig bei Let-bindings: Analysiert zuerst den Körper, um Benutzungsstellen zu erkennen, danach die rechte Seite des Bindings
+  - Am Beispiel erklären (vielleicht gleich am vorherigen Beispiel mit erklären?)
+  - Das ist so, weil sonst nicht die minimale Arity klar wäre, mit der `go` analysiert wird, die ist aber essentiell für die Präzision der Co-call Analyse
+
+# Demand Analysis
+
+- Der GHC implementiert bereits eine Kardinalitätsanalyse als Teil des Demand Analyzers
+- Ebenfalls Rückwärtsanalyse
+- Beantwortet die Frage: Wenn dieser Ausdruck ausgewertet wird, wie und wie oft werden seine freien Variablen benutzt?
+  - Beobachtet ähnlich wie Arity Analysis die eingehende Arity, approximiert das Analyseergebnis des Bindings aber nur sehr grob durch einen Demand Transformer
+- Higher-order (interprozedural) über Demand Signatur, die einem Binding zugeordnet wird
+```haskell
+ruffle x _ = x * x
+
+main = do
+  let expensive = ...
+  print (ruffle (1 + 1) expensive)
+```
+- Analysiert bei Bindings zuerst die rechte Seite, dann den Körper
+- Hier wird also zunächst `ruffle` analysiert
+- Nimmt an, `ruffle` wird mit manifest arity, hier mit 2 Argumenten, aufgerufen und der Rückgabewert wird benutzt
+- wie `ruffle` bei einem Aufruf seine Argumente benutzt
+- Hier: Wird der Rückgabewert von `ruffle` ausgewertet, dann wird `x` zweimal (mehr als einmal) ausgewertet
+- Das zweite Argument wird nie ausgewertet!
+- Das wird nun in einer Demand Signatur für `ruffle` gespeichert (higher-order Information)
+- Nun wird `main` analysiert
+- Interessant ist der Aufruf `ruffle 1 expensive`
+- `ruffle` wird mit 2 Argumenten aufgerufen und das Ergebnis von `print` verlangt
+- Nun können wir die Demand Signatur anwenden, die die Nachfrage an den Rückgabewert auf Nachfragen der Argumente übersetzt  
+  - `1 + 1` wird also mehrfach verwendet, `expensive` hingegen gar nicht!
+- Die higher-order Informationen über `expensive` wären auch für die Arity Analyse sinnvoll, die bei Funktionsargumenten sehr konservativ ist 
+
+```haskell
+sum n =
+  let continuation = 
+        let expensive = ...
+        in \n -> expensive + n - expensive
+
+      stop x = 
+        x > n
+
+      go x = 
+        if stop x
+        then continuation
+        else \acc -> go (x + 1) (acc + x)
+
+  in go 0 0
+```
+
+- In unserem Beispiel von vorher findet die Analyse aber nicht heraus, dass `continuation` nur einmal aufgerufen wird
+- Wenn die Analyse beim binding von `go` ankommt, wird sie für die Fixpunktiteration eine vorläufige, optimistische Demand Signatur für `go` einfügen
+- Nach der ersten Iteration sagt diese, dass `go` auch `continuation` auswertet
+- Die nächste Iteration muss den Demand unter dem Lambda-binder expandieren, der so auch `continuation` aufrufen könnte
+- Da das in einer Closure passiert, die wir zurückgeben, muss die Analyse konservativ davon ausgehen, dass diese mehrmals aufgerufen werden kann
+
+# GHC: Core-to-Core Optimization Pipeline
+
+- Im GHC wird Call Arity einmal aufgerufen, Demand Analysis zweimal
+- Insbesondere ist die Reihenfolge Call Arity -> Simplifier für eta-expansion -> Demand Analysis -> Worker/Wrapper Transformation
+- Der Simplifier zerstört die im Syntaxbaum hinterlegten Analyseresultate der Demand Analysis
+- Findet die Worker/wrapper Transformation vor Eta-Expansion statt, können die zu expandierenden Argumente nicht von Worker/Wrapper profitieren
+
+# Call Arity vs. Demand Analysis
+
+|  | Call Arity | Demand Analysis |
+|--|------------|-----------------|
+| Schwächen | Nicht higher-order (Arity/Co-call Signaturen denkbar) | Präzisionsverlust durch Ignorieren der eingehenden Arity bei Funktionen |
+| Let-Bindings | Körper zuerst für Arity, dann Bindings | Bindings zuerst für Signaturen, dann Körper |
+| Pipelinekonflikte | Nachgelagerter Simplifier run zerstört Demand Analyseresultate | Nicht eta-expandierte Binder profitieren nicht von Worker/Wrapper |
+
+# Ziel der Arbeit
+
+- Call Arity in Demand Analyse integrieren
+- Higher-Order Co-Call Analyse über analoge Co-Call Signaturen für Funktionen
+- Dazu nötig: Vereinheitlichung der Analysereihenfolge für Let-Bindings  
+  - 'echte' Fixpunktiteration, entkoppelt vom Syntaxbaum
+- Pipelinekonflikte lösen über einen zusätzlichen Aufruf der kombinierten Demand Analyse  
+  - verschlechtert Compiler Performance, für Rückführung in GHC inakzeptabel
+  - aber angemessenes Ziel im Rahmen der Masterarbeit
+
+<!-- Markdeep: --><style class="fallback">body{visibility:hidden;white-space:pre;font-family:monospace}</style><script src="markdeep.min.js"></script><script src="https://casual-effects.com/markdeep/latest/markdeep.min.js"></script><script>window.alreadyProcessedMarkdeep||(document.body.style.visibility="visible")</script>

@@ -1,0 +1,30 @@
+
+%%% Typographic defs
+
+% From https://stackoverflow.com/a/39363004/388010
+% Add a period to the end of an abbreviation unless there's one
+% already, then \xspace.
+\makeatletter
+\DeclareRobustCommand\onedot{\futurelet\@let@token\@onedot}
+\def\@onedot{\ifx\@let@token.\else.\null\fi\xspace}
+
+\def\eg{e.g\onedot} \def\Eg{E.g\onedot}
+\def\ie{i.e\onedot} \def\Ie{I.e\onedot}
+\def\cf{c.f\onedot} \def\Cf{C.f\onedot}
+\def\etc{etc\onedot} \def\vs{vs\onedot}
+\def\wrt{w.r.t\onedot} \def\dof{d.o.f\onedot}
+\def\etal{et al\onedot}
+\makeatother
+
+\newcommand{\newdef}[1]{\emph{#1}}
+
+\newcommand{\anal}[1]{\textsc{#1}\xspace}
+\newcommand*{\MayAlias}{\anal{MayAlias}}
+\newcommand*{\MustAlias}{\anal{MustAlias}}
+\newcommand*{\MinCard}{\anal{MinCard}}
+\newcommand*{\MaxCard}{\anal{MaxCard}}
+
+%%% Minted for syntax highlighting
+
+\newmintinline[hs]{haskell}{}
+\newminted[haskell]{haskell}{linenos,mathescape,texcomments,autogobble}
