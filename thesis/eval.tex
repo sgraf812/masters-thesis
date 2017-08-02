@@ -86,30 +86,36 @@ The 0.9\% improvement in allocations comes from an expression within \texttt{dft
 \begin{haskellcode}
   module Main (main) where
 
-  p x = ...
+  fac :: Int -> Int
+  fac n = 
+    if n == 0 
+    then 1 
+    else n * fac (n-1)
 
-  c x y = 
-    if p x 
-    then \z -> y 
-    else \z -> c y z
-  
-  f x = 
-    if p x 
-    then c x (f (x-1))
-    else \z -> x
+  double :: [Int] -> ([Int] -> [Int]) -> [Int] -> [Int]
+  double xs k =
+    case xs of
+      [] -> k
+      x:xs' -> \ys -> x*2 : double xs' k ys
 
-  main = 
-    print (f 1 2)
+  f :: Int -> [Int] -> [Int]
+  f n =
+    if fac n < 10
+    then \xs -> 10:xs
+    else \xs -> double xs (f (n-1)) xs
+
+  main =
+    print (f 1 [2])
 \end{haskellcode}
 
 Our analysis finds out that \hsinl{f} can be $\eta$-expanded to arity 2.
 Neither Call Arity nor the Demand Analyser recognises this.
 
-Call Arity doesn't have any mechanism similar to usage signatures, so it assumes a conservative call arity of 1 for \hsinl{f} because of the call \hsinl{c x (f (x-1))}.
+Call Arity doesn't have any mechanism similar to usage signatures, so it assumes a conservative call arity of 1 for \hsinl{f} because of the call \hsinl{double xs (f (n-1)) xs}.
 
-The Demand Analyser, on the other hand, has available only the usage signature for manifest arity 2, which is too conservative and unleashes a usage of $1*U$ on \hsinl{f (x-1)} instead of $1*C^1(U)$.
+The Demand Analyser, on the other hand, has available only the usage signature of \hsinl{double} for manifest arity 2, which is too conservative and unleashes a usage of $1*U$ on \hsinl{f (n-1)} instead of $1*C^1(U)$.
 
-Our analysis infers from the call to \hsinl{c} with incoming arity 3 a call use of $C^1(U)$ for \hsinl{f (x-1)}, exposing \hsinl{f} to a total usage of $C^\omega(C^1(U))$, which we can leverage by expanding the arity to 2.
+Our analysis infers from the call to \hsinl{double} with incoming arity 3 a call use of $C^1(U)$ for \hsinl{f (n-1)}, exposing \hsinl{f} to a total usage of $C^\omega(C^1(U))$, which we can leverage by expanding the arity to 2.
 
 In expanding the analogue of \hsinl{f} within \texttt{dfth}, the analysis enables additional inlining and other transformations.
 \smallskip
