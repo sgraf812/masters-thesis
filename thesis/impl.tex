@@ -61,13 +61,14 @@ Which usage are top-level bindings exposed to?
 For exported bindings, we don't oversee all potential use sites, so we have to be conservative and assume $\omega*U$. 
 Exported bindings are similar to garbage collection roots: 
 All non-absent bindings must be reachable through an exported binding. 
-This is because for non-exported top-level bindings, their whole scope is known.
+This is because the whole scope of non-exported top-level bindings is statically known.
 
 Based on this observation, it is also clear what the expression within the innermost \keyword{let} should be: A tuple of the exported identifiers.
 This encoding of modules is common-place in languages like JavaScript (by the name of \emph{Revealing module pattern}) that lack(-ed) a proper module system.
 
 Considering exported identifiers as roots is necessary, but, as it turned out, not sufficient.
-GHC's rewrite rules and vectorisation declarations possibly mention identifiers which are neither exported, nor reachable otherwise, so these must be included in the root set.
+GHC's rewrite rules and vectorisation declarations possibly mention identifiers which are neither exported, nor otherwise reachable.
+These must be included in the root set!
 
 A similar problem occurs for \emph{unfoldings}. 
 Unfoldings enable inlining across module boundaries by serialising the \emph{unoptimised} bound expression into the module's interface file, a Haskell-specific compilation artifact like object files.
@@ -346,7 +347,7 @@ Commonly, the nodes which need to be updated are tracked within a \emph{worklist
 The order in which the worklist processes unstable nodes also affects performance \parencite{dfa}.
 The caching of analysis results between iterations \parencite{dmd} is a nice side-effect of the explicit graph abstraction.
 
-Additionally, associated with each node is a \emph{transfer functions} which has the single responsibility of recomputing analysis information in terms of the current state of its dependencies.
+Additionally, associated with each node is a \emph{transfer function} which has the single responsibility of recomputing analysis information in terms of the current state of its dependencies.
 
 Driven by the looming complexity in analysis order, we decided to break down our analysis in a similar manner.
 In an effort to specify transfer functions separate from the iteration strategy, we arrived at the (slightly simplified) interface in \cref{fig:worklist}.
@@ -409,7 +410,7 @@ As it turned out, we lost important structure in forgetting about monotonicity (
 Allocating \hsinl{FrameworkNode}s for every syntactic element enables caching of intermediate results and avoids whole chains of nodes to be recomputed when no change is detected.
 On the other hand, the bookkeeping in the iteration algorithm might outweigh any performance benefits of caching.
 Also, memory usage becomes an issue for big graphs.
-This is why we decided to only allocate \hsinl{FrameworkNode}s where we needed to break cycles in the data-flow graph.
+This is why we decided to only allocate \hsinl{FrameworkNode}s where we had to break cycles in the data-flow graph.
 Cycles arise exactly where we used the \fix operator to tie knots in \cref{sec:letrec}, thus at least we need to allocate nodes for the right-hand sides of bindings (referred to as \letdnsc nodes) and for whole \keyword{let} bindings (\letupsc nodes).
 
 Of course, just by allocating nodes the feedback cycles aren't broken yet:
@@ -434,7 +435,9 @@ Other than that, we have to allocate a node (\hsinl{root} in the example that fo
 \end{haskellcode}
 
 By passing the singleton set as the second argument, we express that the module expression is put under top use $U$.
-From there, the iteration algorithm begins to explore the data-flow graph in a depth-first fashion, which -- as we already pointed out at the begin of this section -- is crucial for termination, as the graph is infinite, while the nodes reachable from $(\hsinl{root}, U)$ is finite.
+From there, the iteration algorithm begins to explore the data-flow graph in a depth-first fashion. 
+As we already pointed out at the begin of this section, this is crucial for termination: 
+The graph itself is infinite, while the set of nodes reachable from $(\hsinl{root}, U)$ is finite.
 
 This is best understood by a simple example which already exhibits quite a complex iteration order.
 
@@ -525,13 +528,13 @@ This is best understood by a simple example which already exhibits quite a compl
     \item
       Analysis of the expression bound to \hsinl{main} continues.
       The call use on $\hsinl{fac}$ gets sequentially combined with the call use from the unleashed \letdnsc node, for a total call use of $C^\omega(U) \equiv U$.
-      Nothing iteresting happens to the literal $12$, thus the usage type of the \letdnsc node for $(\hsinl{main}, U)$ is $\lTriple{\{(\hsinl{fac}, \hsinl{fac})\}}{\maplit{\hsinl{fac}}{U}}{\top}$.
+      Nothing interesting happens to the literal $12$, thus the usage type of the \letdnsc node for $(\hsinl{main}, U)$ is $\lTriple{\{(\hsinl{fac}, \hsinl{fac})\}}{\maplit{\hsinl{fac}}{U}}{\top}$.
       However, because \hsinl{main}'s bound expression is not in WHNF, only the uninteresting usage signature is propagated to the call site within $(\keyword{let}_2, U)$.
       Note that the annotated expression would be calculated at this point, too. 
       We don't need it at the call site, but when we handle the \keyword{let} binding in the next step.
     \item
       Unwinding the call stack once more, the inner \keyword{let} binding for \hsinl{main} is now resolved as part of the \letupsc node $(\keyword{let}_2, U)$.
-      The usage \hsinl{main} is exposed to in the body is $\omega*U$.
+      Within the body, \hsinl{main} is exposed to usage $\omega*U$.
       Thus, there is a dependency on the \letdnsc node $(\hsinl{main},U)$, at least for the annotated expression.
       The algorithm just iterated that node in the last step, so its result is reused.
       Since the expression bound to \hsinl{main} is not in WHNF, we also unleash the associated usage type, resulting in a usage type of $\lTriple{\{(\hsinl{fac}, \hsinl{fac})\}}{\maplit{\hsinl{fac}}{U}}{\top}$ for the whole inner \keyword{let} expression.
@@ -542,7 +545,7 @@ This is best understood by a simple example which already exhibits quite a compl
       This introduces a dependency on the \letdnsc node $(\hsinl{fac}, U)$ for which there is no value yet, causing the algorithm to do a `call'.
     \item
       Analysis of \hsinl{fac} under use $U$ yields the same usage type as under use $C^1(U)$, but that is quite irrelevant.
-      More importantly, the lambda is not one-shot and the argument binder for \hsinl{n} is not single-entry, contrary to the optimistic situation under use $C^1(U)$.
+      More important, the lambda is not one-shot and the argument binder for \hsinl{n} is not single-entry, contrary to the optimistic situation under use $C^1(U)$.
       Also, $(\hsinl{fac}, U)$ is not `recursive', rather it depends on $(\hsinl{fac}, C^1(U))$.
     \item
       Unwinding to $(\keyword{let}_1, U)$ again, this results in an uninteresting usage type $\lTriple{\emptyset}{\emptymap}{\top}$ for the annotated expression.
@@ -609,7 +612,7 @@ It turns out that convergence depends even on these unstable approximations to b
 
 This is easy to reproduce by removing all mentions of the \hsinl{monotonize} function from the main analysis module and then running the test \texttt{joao-circular} with a \texttt{devel2} flavored build of the compiler.
 The file \texttt{Visfun\_Lazy.hs} will violate a monotonicity check while updating the value of a framework node.
-Unfortunately, that file is rather huge and convoluted, so a detailed analysis is out question.
+Unfortunately, that file is rather huge and convoluted, so a detailed analysis is out of question.
 
 \section{Hacking on GHC}
 
@@ -621,7 +624,7 @@ More subtle bugs require entire days of tracing through tests and thinking hard 
 Many bugs hid behind module boundaries, because the code concerned with serialising usage signatures is quite scattered.
 Some identifiers, such as dictionary selectors, primitive operators and runtime errors, get special treatment by GHC, the places at which this happens were discovered in a number of successive debugging sessions.
 
-Not-so-absent thunks which the analysis identified as absent lead to crashes at runtime, only more informative than a segfault in that the message mentions absence as a reason.
+Not-so-absent thunks which the analysis identified as absent led to crashes at runtime, only more informative than a segmentation fault in that the message mentions absence as a reason.
 
 So it came that the most gnarly class of bugs manifested themselves as absent errors which only popped up across module boundaries, involving type class instances referencing absent thunks.
 It took quite some time and head-scratching to nail down rewrite rules as the culprit, which had to be regarded as reachability roots as explained in \cref{sec:toplvl}.
@@ -631,5 +634,5 @@ Especially figuring out which things needed to be rebuilt after some change and 
 Sometimes even a \texttt{make clean} wouldn't get rid of some clearly build system-related issues, leaving no choice but to do a complete fresh checkout.
 Experiences like the latter don't exactly strengthen confidence in the build system, so we look forward to seeing \texttt{hadrian}\footnote{\url{https://github.com/snowleopard/hadrian}} succeed.
 
-Lastly, the test and benchmark suites of GHC are quite essential in crushing occasional hopes after having fixed a complicated bug by immediately confronting the developer with another regression.
+Lastly, the test and benchmark suites of GHC are quite essential in crushing occasional hopes after having fixed a complicated bug, by immediately confronting the developer with another regression.
 Of course, this is a good thing for both the maturity of GHC as well as a humbling experience for the soul.

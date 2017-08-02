@@ -55,8 +55,8 @@ We got to abstract data-flow iteration logic behind a \hsinl{State} monad, for w
 
 \section{Future Work}\label{sec:fut}
 
-Developing the deep understanding of Call Arity and Cardinality Analysis necessary to merge the two in itself was quite time consuming.
-Implementing a few unmentioned iterations of the analysis, combined with fixing all the repercussions of hacking on a central part of GHC took even more time.
+It was quite time consuming to develop the deep understanding of Call Arity and Cardinality Analysis necessary to merge the two.
+Implementing a few unmentioned iterations of the analysis, combined with fixing all the repercussions of hacking on a central part of GHC, took even more time.
 Also considering the effort invested in fleshing out the writing, it is clear that some things were out of scope for this thesis.
 
 For reasons conjectured in \cref{sec:bench}, the full analysis can't cope with some input programs, space-wise.
@@ -64,7 +64,7 @@ Interestingly, the problem wasn't so much the topology of graphs (which were alm
 The obvious solution is to employ the much better performing third variant, which still provides a benefit over the separate Call Arity and Cardinality Analysis at hardly any cost in precision.
 
 It would be interesting to see if some more explicitly operational model of sharing would alleviate the need for the \letupsc analysis order, as it is responsible for some imprecision even when refined with co-call graphs (\cf the examples in \cref{sec:let}).
-All our attempts to split off shared evaluation failed because of the complex interaction with sequential composition (\eg $\both$).
+All our attempts to split off shared evaluation into a heap-like model failed, because of the complex interaction with sequential composition (\eg $\both$).
 Also, the grain of improvement to precision probably wouldn't matter much, as we already are at the far end of diminishing returns, it seems.
 But it would be interesting to see the comparison to variant \varedges exactly for that reason.
 

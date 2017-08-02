@@ -184,8 +184,8 @@ All annotations in the Core output seem proper and beyond that no further transf
 This suggests that either the backend (the implementation of which the author is blissfully unaware) or some optimisation within referenced \texttt{base} modules is responsible.
 
 The same arguments apply to the 15.4\% improvement in \progname{puzzle}:
-A number of new annotations that haven't kicked of any further Core-to-Core transformation.
-The set of functions referenced from \texttt{base} is quite minimal, to it is unlikely that optimisations hide there.
+A number of new annotations that didn't enable any further Core-to-Core transformation.
+The set of functions referenced from \texttt{base} is quite minimal, so it is unlikely that optimisations hide there.
 
 \subsection{Compiler Performance}\label{sec:compperf}
 
@@ -220,7 +220,7 @@ Even in a version of \varedges where the co-call graphs still were present in a 
   \caption{
     Performance figures recorded while compiling stage 2 GHC (unoptimised, but with optimised libraries) and nofib (completely optimised) with the three variants, relative to GHC 8.2.1.
     Resource usage of \varfull and \varcalls grows beyond limits in specific cases, accounting for a major blowup overall.
-    The most approximate variant, \varedges, shows an acceptable increase, knowing that there are quite some opportunities left for making it more efficient.
+    The most approximate variant, \varedges, shows an acceptable increase, knowing that there are opportunities left for making it more efficient.
   }
   \label{tbl:compperf}
 \end{table}

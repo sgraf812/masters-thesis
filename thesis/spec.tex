@@ -69,7 +69,7 @@ Important analysis information includes \parencite{card}:
 \end{enumerate}
 
 As we saw in \cref{sec:card}, a usage analysis computes upper bounds on these cardinality questions.
-The answer to the first question above then consists of identication of \emph{one-shot} lambdas, \eg the cases where the body of the lambda expression is called at most once, relative to its defining scope.
+The answer to the first question above then consists of identification of \emph{one-shot} lambdas, \eg the cases where the body of the lambda expression is called at most once, relative to its defining scope.
 Similarly, the second question is answered by marking thunks which have the \emph{single-entry} property, \eg thunks that are evaluated at most once relative to an evaluation of its binding expression.
 Absence is a matter of answering the question if a binding is used at all, \eg at most zero times.
 
@@ -132,7 +132,7 @@ Semantically, a $\sUse$ describes how the value of an expression is used, after 
       Where this differs from head-use is best understood in terms of the attached equalities in \cref{fig:usg}.
 
       For an expression that evaluates to a pair, unknown use would correspond to the pair use $U(\omega*U,\omega*U)$, e.g.\ the pair components have the worst possible usage.
-      A unknown use on a function expression can be interpreted as a use of $C^\omega(U)$ by the last equality: 
+      An unknown use on a function expression can be interpreted as a use of $C^\omega(U)$ by the last equality: 
       We don't know how the resulting function will be used, so we have to assume multiple calls, each with unknown use. 
 \end{itemize}
 
@@ -146,7 +146,7 @@ Other binding mechanisms like lambdas and \keyword{case} just alias another bind
 
 It is inappropriate to model usage of an identifier with $\sUse$, as identifiers can syntactically occur more than once, or even be absent. 
 Yet every use site, or \emph{usage}, puts the identifier's bound expression under a $\sUse$. 
-Thus, every identifier has an associated $\sUsage$, that describes how often and how, if at all, the identifier was used.
+Thus, every identifier has an associated $\sUsage$, which describes how often and how, if at all, the identifier was used.
 
 An identifier $\sUsage$ of $A$ represents \emph{absence} of any usage. 
 Right-hand sides of absent bindings are dead code and never used.
@@ -177,7 +177,7 @@ If we put the expression under some use $U$, we find out the following facts by 
 \end{example}
 
 We just saw a single call usage $1*C^1(U)$ on a free variable \hsinl{f}. 
-The following expressions hints at the fact that, in general, right-hand sides of bindings can be put under call uses $C^{n_1}(C^{n_2}(\ldots C^{n_k}(U)\ldots))$ for any $n_i\in\sMulti$.
+The following expressions hint at the fact that, in general, right-hand sides of bindings can be put under call uses $C^{n_1}(C^{n_2}(\ldots C^{n_k}(U)\ldots))$ for any $n_i\in\sMulti$.
 This is through exploiting currying and sharing through bindings.
 
 \begin{example} 
@@ -190,7 +190,7 @@ f 0 0 + f 1 1
 This demonstrates how multi-call uses can be introduced. 
 A use of $U$ on the expression manifests in two sequential usages $1*C^1(C^1(U))$ of \hsinl{f}, each corresponding to a single call with two arguments. 
 These combine to an identifier usage of $\omega*C^\omega(C^1(U))$: 
-After all, the lambda expression the function bound to \hsinl{f} reduces to is called twice, resulting in two (non-shared!) values. 
+After all, the lambda expression, which the function bound to \hsinl{f} reduces to, is called twice, resulting in two (non-shared!) values. 
 In each case, these function values are immediately called with one argument.
 
 The following snippet illustrates how multi-calls can be shifted further down the chain of call uses:
@@ -211,7 +211,7 @@ In these cases of \emph{single-entry} thunks, GHC exploits that call-by-need coi
 
 As the remarks in \textcite[Section~2.5]{card} point out, in a non-strict language with the \hsinl{seq} primitive, it is even possible for functions to be \emph{evaluated} multiple times, yet \emph{called} only once.
 If an expression like \hsinl{seq f (f 3)} is put under use $U$, this exposes \hsinl{f} to a usage of $\omega*C^1(U)$: \hsinl{f} is evaluated multiple times, yet called only once.
-This is the same argument that \textcite[Appendix~C.2]{warnsbrough} makes with their language of \emph{use} \vs \emph{demand}.
+This is the same argument that \textcite[Appendix~C.2]{warnsbrough} makes with his language of \emph{use} \vs \emph{demand}.
 
 \subsection{Usage signatures}
 
@@ -298,7 +298,7 @@ The co-call graph for the \hsinl{if} expression crucially \emph{does not} contai
 Knowing that \hsinl{x} is not forced together with \hsinl{y}\footnote{Prior to looking at the right-hand side of \hsinl{y} is, of course.}, we avoid a self-edge on \hsinl{x} after analysing the right-hand side of \hsinl{y}.
 
 Consequently, \hsinl{x} is recognized of only being evaluated once. 
-Other usage analyses like that of GHC's Cardinality Analysis \parencite{card} only model self-loops in the underlying co-call structure (\eg usage multiplicity), so they would fail to recognize the absent edge between \hsinl{x} and \hsinl{y} and conservatively assume \hsinl{x} to be called more than once\footnote{It is worth pointing out that this is only the case for when \hsinl{y} is a thunk (\eg not in WHNF), as this imprecision pertains to the \letupsc rule of \textcite{card}. 
+Other usage analyses like that of GHC's Cardinality Analysis \parencite{card} only model self-loops in the underlying co-call structure (\eg usage multiplicity), so they would fail to recognize the absent edge between \hsinl{x} and \hsinl{y} and conservatively assume \hsinl{x} to be called more than once\footnote{It is worth pointing out that this is only the case when \hsinl{y} is a thunk (\eg not in WHNF), as this imprecision pertains to the \letupsc rule of \textcite{card}. 
 We discuss this in more detail in \cref{sec:let}.}.
 
 We enrich the \emph{usage types} of GHC's Cardinality Analysis \parencite{card} with co-call graphs in order to generalise both (c.f. \cref{sec:generalise}).
@@ -556,7 +556,7 @@ Note this only happens in the wild in conjunction with the \hsinl{seq} primitive
 For example in \hsinl{seq (\\x -> y) 3}, the lambda will be exposed to a head use, while \hsinl{3} will be fully used.
 
 In the other case, we try to approximate the incoming use $u$ by a call use $C^n(u_b)$. 
-We'd like that $u$ is some kind of call use, but if you give a programmer enough rope to hang herself (\eg \hsinl{unsafeCoerce}) to bypass the type system, it is possible for $u$ to be incomparable to a call use, \ie $U(1*U)$. 
+We'd like that $u$ is some kind of call use, but if you give a programmer enough rope to hang himself (\eg \hsinl{unsafeCoerce}) to bypass the type system, it is possible for $u$ to be incomparable to a call use, \ie $U(1*U)$. 
 In this case, the pattern match in the definition would be incomplete.
 Thus the slightly less precise, yet still sound notation using $\lleq$: 
 In these cases, $u$ always compares to the bottom element $U=C^\omega(U)$.
@@ -606,7 +606,7 @@ As mentioned in \cref{sec:exp}, $\sMkPair$ is special in that it cannot be rebou
 Although desugaring pairs in such a way is a nice way to keep the definition short, it is worth pointing out that the complexity is just delegated to the usage transformer for the $\sMkPair$ identifier, which will have to provide an appropriate usage signature. 
 We will handle this in the variable case.
 
-\subsection{\keyword{case} Expression}
+\subsection{\keyword{case} Expressions}
 
 The limited \keyword{case}-expressions of our object language serve the sole purpose of desctructuring pairs.
 
@@ -705,7 +705,7 @@ For the second case it is illustrative to consider an application to the pair co
 
 If put under use $U(1*U, A)$, we want the component usages to propagate to $x$ and $y$ through a usage signature announced by $\sMkPair$.
 What is the use that $\sMkPair$ is put under? 
-The use on the whole application, wrapped in two single shot calls, $C^1(C^1(U(1*U, A))$.
+The use on the whole application, wrapped in two single shot calls, $C^1(C^1(U(1*U, A))$!
 For this specific incoming use, we want the transformer denoting $\sMkPair$ to have a usage signature of $1*U \to A \to \bot$.
 In general, for saturated single calls with arity at least as high as the data constructor's (that of pairs is two), we can propagate the usage of the pair components in the usage signature.
 
@@ -847,7 +847,7 @@ We see in a minute an example that clears things up, but let us first have a loo
 
 Apart from recursing over the entire finite map in the second parameter (which makes it a well-defined function), it works very much like the sequential composition operator $\both$ on usage types from \cref{sec:both}.
 
-The only thing in which this substitution operator is more precise is in selecting only a subset $N$ of variables from $\dom{\varphi'}$ which to sequentially compose with $\dom{\varphi_i}$.
+The substitution operator is more precise than plain sequential composition by selecting \emph{only a subset} $N$ of variables from $\dom{\varphi'}$ which are to be sequentially composed with $\dom{\varphi_i}$.
 
 As \textcite{callarity} proves, it is safe to choose only the neighbors of $x_i$ in the co-call graph for this:
 All other variables are not actually evaluated together with $x_i$, so we should not need to sequentially compose them.
@@ -1034,7 +1034,7 @@ To wrap this up, we visit some examples contrasting \letupsc style analysis with
 \subsection{Recursive Let}\label{sec:letrec}
 
 \Cref{sec:let} was dedicated to explaining analysis of \keyword{let} bindings in great detail. 
-In particular, the distinction between functions and thunks and how substitution in co-call graphs work are delicate technicalities.
+In particular, the distinction between functions and thunks and how substitution in co-call graphs works are delicate technicalities.
 
 This section discusses how to extend the analysis to recursive \keyword{let} bindings.
 
@@ -1226,6 +1226,7 @@ In short, we would need to
       \item A single call with arity higher than manifest arity $n$ has happened ($u\lleq\underbrace{C^1(C^1(\ldots C^1(\uscore)\ldots))}_{n \text{~times}}$). Actually analyse the bound expression through $\tau$ in that case.
       \item Something stronger than a single call happened. Multiply the extracted usage type by $\omega$ in that case.
     \end{enumerate}
-  \item Track only self-edges in the co-call graph and conservatively assume all other edges exist. This corresponds to tracking per-identifier usage multiplicity separately instead of in a co-call graph, see \cref{sec:graph}.
+  \item 
+    Track only self-edges in the co-call graph and conservatively assume all other edges exist. This corresponds to tracking per-identifier usage multiplicity separately instead of in a co-call graph, see \cref{sec:graph}.
 \end{itemize}
 

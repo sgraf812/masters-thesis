@@ -96,7 +96,7 @@ Both \emph{absence analysis} (\eg, is $\beta$ in the cardinality annotation $[\a
 
 The results of a sharing analysis support the call-by-name optimisation from above, while absence information is needed together with strictness information for the worker/wrapper transform.
 
-As \textcite[Section~2.4]{verstoep} points out, a sharing analysis finds out similar results as a static analysis based on \emph{uniqueness types}.
+As \textcite[Section~2.4]{verstoep} point out, a sharing analysis finds out similar results as a static analysis based on \emph{uniqueness types}.
 They serve different purposes, however; Uniqueness information is propagated during type-checking and may affect which programs are rejected, while sharing analysis is an enabling analysis for other optimisations in the middleend.
 
 That also means that the benefits of uniqueness types might carry over to thunks that a sharing analysis finds to be single-entry, just by changing their type after it passed type-checking.
@@ -434,7 +434,7 @@ We will attempt to provide insight into how information flows between strictness
       (strict) edge node {} (simp)
       (cpr) edge node {} (ww);
   \end{tikzpicture}
-  \caption{Information flow between usage, strictness and constructed product results analysis and how their results are used by different transformations within GHC.}
+  \caption{Information flow between usage, strictness and constructed product result analysis and how their results are used by different transformations within GHC.}
   \label{fig:dmd}
 \end{figure}
 

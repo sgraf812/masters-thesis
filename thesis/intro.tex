@@ -17,12 +17,12 @@ Hence, principles such as separation of concerns and `Don't repeat yourself' (DR
 Also, as the number of users and language extensions grows, compiler performance has been an increasing woe.
 
 GHC, as of version 8.2, ships with two analyses that share interesting ideas: 
-There's Call Arity \parencite{callarity}, the result of Joachim Breitner's dissertation, and a new Higher-order Cardinality Analysis \parencite{card} which integrates with the existing Demand Analyser.
+There's Call Arity \parencite{callarity}, the result of Joachim Breitner's dissertation, and a new Higher-order Cardinality Analysis \parencite{card}, which integrates with the existing Demand Analyser.
 Call Arity tries to $\eta$-expand bindings based on usage information in order to make \hsinl{foldl} a good consumer for list fusion, whereas Cardinality Analysis (referring to the contributions of \textcite{card}) is concerned with identifying single-entry thunks and one-shot lambdas.
 
 It is not safe in general to $\eta$-expand thunks, as it possibly duplicates otherwise shared work. 
 All is not lost however: It is always safe to $\eta$-expand single-entry thunks to the minimum arity of all possible calls.
-Thus, in order for Call Arity to justify $\eta$-expansion of thunks, it has to interleave with the arity analysis its own sharing analysis based on co-call graphs \parencite{callarity} to identify said single-entry thunks.
+Thus, in order for Call Arity to justify $\eta$-expansion of thunks, it has to interleave the arity analysis with its own sharing analysis based on co-call graphs \parencite{callarity} to identify said single-entry thunks.
 Edges in co-call graphs correspond to a `is possibly evaluated with' relation between variables.
 Therefore, absence of a self-edge implies that a variable is evaluated at most once, \eg is single-entry.
 
@@ -52,7 +52,7 @@ A formal specification of the analysis in terms of a simplified language is give
 The analysis works by abstract interpretation over a domain quite similar to that of \textcite{card}, outlined in \cref{sec:dom}.
 In \cref{sec:transfer} follows the definition of the transfer function, while we discuss how to recover Call Arity (\eg $\eta$-expansion based on usage) and Cardinality Analysis in \cref{sec:generalise}.
 
-\Cref{sec:impl} discusses challenges solved while implementing the analysis within a GHC 8.2 release candidate.
+\Cref{sec:impl} discusses challenges solved while implementing the analysis within GHC 8.2.1.
 Of special note are our insights on solving the graph-based data-flow problem in \cref{sec:solve} and our thoughts on approximating usage transformers in \cref{sec:approx}.
 
 We discuss benchmark results in \cref{sec:eval}.
