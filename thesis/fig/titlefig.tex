@@ -1,0 +1,25 @@
+\begin{figure}
+  \centering
+  \begin{tikzpicture}[shorten >=1pt,x=10em,y=7em,auto]
+      \tikzset{every loop/.style={looseness=4}}
+      \tikzstyle{n}=[draw,shape=circle,minimum size=5em,inner sep=0pt]
+      \tikzstyle{root}=[n,fill=myred]
+      \tikzstyle{up}=[n,fill=myblue]
+      \tikzstyle{down}=[n,fill=mygreen]
+      \node (root) at (0,2) [root] {$(\hsinl{root}, U)$};
+      \node (let1) at (1,2) [up] {$(\keyword{let}_1, U)$};
+      \node (let2) at (2,2) [up] {$(\keyword{let}_2, U)$};
+      \node (main) at (2,1) [down] {$(\hsinl{main}, U)$};
+      \node (fac1) at (1.5,0) [down] {$(\hsinl{fac}, C^1(U))$};
+      \node (facn) at (1,1) [down] {$(\hsinl{fac}, U)$};
+      \path[->,line width=1pt] 
+        (root) edge node {} (let1)
+        (let1) edge [loop above] node {} ()
+               edge node {} (let2)
+               edge node {} (facn)
+        (let2) edge node {} (main)
+        (main) edge node {} (fac1)
+        (facn) edge node {} (fac1)
+        (fac1) edge [loop below] node {} ();
+  \end{tikzpicture}
+\end{figure}

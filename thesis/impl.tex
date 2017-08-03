@@ -448,7 +448,7 @@ This is best understood by a simple example which already exhibits quite a compl
     module Main (main) where
 
     fac n = 
-      if n <= 1 
+      if n == 0 
       then 1 
       else n * fac (n - 1)
 
@@ -459,7 +459,7 @@ This is best understood by a simple example which already exhibits quite a compl
 
   \begin{haskellcode}
     let fac n =
-          if n <= 1
+          if n == 0
           then 1
           else n * fac (n - 1)
     in let main = print (fac 12)
@@ -467,6 +467,8 @@ This is best understood by a simple example which already exhibits quite a compl
   \end{haskellcode}
 
   \Cref{fig:framework} depicts the resulting data-flow framework, or rather the finite part reachable from node $(\hsinl{root}, U)$ (again, \hsinl{root} represents the usage transformer denoting the module expression). 
+
+  %\input{fig/titlefig.tex}
 
   \newcommand{\fw}[1]{\overrightarrow{#1}}
   \newcommand{\bw}[1]{\overleftarrow{#1}}
