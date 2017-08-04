@@ -4,13 +4,17 @@
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
 \usepackage{babel}
+\usepackage{booktabs}
 \usepackage{tikz,calc,ifthen}
 \usepackage{mathtools}
 \usepackage[normalem]{ulem}
 \usepackage{graphicx}
 \usepackage{xspace}
+\usepackage{xcolor}
 \usepackage{minted}
 \usepackage{realboxes}
+\usepackage{pifont}
+\usepackage{stmaryrd}
 
 \usetikzlibrary{positioning,calc,arrows,shapes}
 \tikzset{
@@ -498,8 +502,7 @@
                 else y
         \end{haskell}
       \end{column}
-      \begin{column}[t]{0\textwidth}
-        \vspace{0pt}
+      \begin{column}{0\textwidth}
         \begin{tikzpicture}
           \node at (0,0) (0) {\hs{b}};
           \node at (1,0.3) (1) {\hs{x}};
@@ -530,7 +533,7 @@
                 else y
         \end{haskell}
       \end{column}
-      \begin{column}[t]{0\textwidth}
+      \begin{column}{0\textwidth}
         \begin{tikzpicture}
           \node at (0,0) (0) {\hs{b}};
           \node at (1,0.3) (1) {\hs{x}};
@@ -546,7 +549,7 @@
       \item \emph{Co-call graphs} track control flow information
         \begin{itemize}
           \item Edges connect variables possible evaluated on the same code path
-          \item Absence of an edge proves mutual exclusive calls
+          \item Absence of an edge proves mutual exclusive uses
           \item Usage information in self-edges
         \end{itemize}
       \item Lack of edge between \hs{x} and \hs{y} avoids self-edge on \hs{x}
@@ -561,7 +564,7 @@
                 else y
         \end{haskell}
       \end{column}
-      \begin{column}[t]{0\textwidth}
+      \begin{column}{0\textwidth}
         \begin{tikzpicture}
           \node at (0,0) (0) {\hs{b}};
           \node at (1,0) (1) {\hs{x}};
@@ -572,73 +575,324 @@
   \end{overprint}
 \end{frame}
 
-
-
-\begin{frame}{Inhalt}
-Idealerweise ein durchgehendes Beispiel benutzen
-mit dem man sowohl das Problem, die Lösung, und evtl. Randfälle erklären kann.
-\vfill
-
-Der Erfahrung nach braucht man 1-2 Minuten pro Folie.
-Für einen 20 Minuten Vortrag sollten es also weniger als 20 Folien sein.
-\vfill
-
-Arbeitsaufwand knapp quantifizieren (Lines of Code, Anzahl Theoreme)
-\vfill
-
-Was nicht im Vortrag kommt geht unter!
-Die Existenz nicht vortrags-fähiger Teile der Arbeit
-(wie etwa länglicher Beweise) zumindest erwähnen.
+\begin{frame}{Combined Usage Analysis}
+  \begin{itemize}
+    \item Idea: Extend usage analysis of the Demand Analyser
+    \item Add co-call graphs to usage types for tracking single-entry thunks
+    \item Glorified \textsc{LetDn}-style analysis with precise call uses for functions
+  \end{itemize}
 \end{frame}
 
-\begin{frame}{Vorkenntnisse}
-Was man bei uns am Lehrstuhl voraussetzen kann:
-\vspace{20pt}
-\begin{itemize}
-  \item libFirm/SSA Form auf einer Folie kurz einführen
-  \item C, Java, Haskell, Lambda ist bekannt
-  \item X10, ML, Agda, Scala kurz einführen
-  \item Andere Programmiersprachen gut motivieren
-\end{itemize}
+\begin{frame}[fragile]{Call Arity vs. Demand Analysis}
+  \begin{overprint}
+    \onslide<1>
+    \begin{itemize}
+      \item Free variable \hs{z} is used only once
+      \item Recall: Demand Analysis unleashes function bindings top-down (\textsc{LetDn})
+      \item \textsc{LetDn} only digests \hs{f} for manifest arity 1, can't look under lambda
+      \item \hs{f} is called with 2 arguments, $C^1(C^1(U))$
+      \item[\xmark] Demand Analysis: \hs{z} is annotated as used multiple times
+      \item[\cmark] Call Arity (\textsc{LetUp}): Arity information flows bottom-up, \hs{z} used once
+    \end{itemize}
+    \begin{center}
+      \begin{minipage}{0.5\textwidth}
+        \begin{haskell*}{escapeinside=||}
+          let f x = 
+                if expensive
+                then \y -> y*|\color{red}\texttt{z}|
+                else \y -> y*x
+          in f 1 2
+        \end{haskell*}
+      \end{minipage}
+    \end{center}
+
+    \onslide<2>
+    \begin{itemize}
+      \item[\xmark] Demand Analysis: \hs{z} is annotated as used multiple times
+      \item[\cmark] Call Arity (\textsc{LetUp}): Arity information flows bottom-up, \hs{z} used once
+      \item Solution: Analyse bound function on demand, when we know specific call use 
+    \end{itemize}
+    \begin{center}
+      \begin{minipage}{0.5\textwidth}
+        \begin{haskell*}{escapeinside=||}
+          let f x = 
+                if expensive
+                then \y -> y*|\color{red}\texttt{z}|
+                else \y -> y*x
+          in f 1 2
+        \end{haskell*}
+      \end{minipage}
+    \end{center}
+  \end{overprint}
 \end{frame}
 
-\begin{frame}{Vortrag}
-Alleine Üben! Daheim vor dem Spiegel üben.
-Einen Vortrag nur alleine, aber im Stehen und laut sprechend,
-vorzutragen ist meist schon lehrreich im Vergleich
-zu stillem Folienbasteln.
-\vfill
-
-Frei sprechen (oder zumindest die Illusion wahren)
-\vfill
-
-Laut und deutlich sprechen (leider häufiges Informatikerproblem)
-\vfill
-
-Live vorführen von implementierten, sofern gut geübt, macht Eindruck
-\vfill
-
-Zeitrahmen \textbf{nicht überziehen}!
-Zwischenfragen gehen natürlich nicht vom Zeitkonto ab
-\vfill
-
-Die Folien dem Betreuer zur Durchsicht geben
+\begin{frame}[fragile]{Combined Usage Analysis}
+  \begin{itemize}
+    \item Glorified \textsc{LetDn}-style analysis with precise call uses for functions
+      \begin{itemize} \item Analyse bound function on demand, when we know specific call use \end{itemize}
+    \item Recursion leads to termination problems
+    \item Rediscovered fixed-point iteration, detached from the syntax tree
+    \item Led to graph-based abstraction solved by worklist algorithm
+  \end{itemize}
+  \begin{center}
+    \begin{minipage}{0.5\textwidth}
+      \begin{haskell}
+        let fac n = 
+              if n == 0
+              then 1
+              else n * fac (n-1)
+        in fac 12
+      \end{haskell}
+    \end{minipage}
+  \end{center}
 \end{frame}
 
-\begin{frame}{Bewertung}
-\begin{itemize}
-  \item Ca.\ 20\% der Gesamtnote kommen durch
-    kommunikative soft-skill Aspekte zustande.
-  \item Ein schlechter Vortrag kann leicht die Note um 0.7 nach unten ziehen.
-\end{itemize}
+\begin{frame}{Transfer Function}
+  \begin{itemize}
+    \item Specification denotes expressions by (monotone) \newdef{usage transformers}
+    \item $\sUTrans = \sUse \to \sUType$
+    \item Reflects dependency on incoming use (\eg arity)
+    \item $\transfer{\uscore}{\uscore[\rho]} : \sExp \to \sTransEnv \to \sUTrans$
+  \end{itemize}
+  \begin{alignat*}{2}
+    \transfer{\sLet{\bind}{e}}{\rho}\,u &{}={}&& (\cmblet{\theta}{\maplit{x_1}{\theta_1}}) \setminus_{x_1} \\
+    \text{where} \\
+     \tau_1 &{}={}&& \transfer{e_1}{\rho} \\
+     \rho' &{}={}&& \maplit{x_1}{\letdown{\tau_1}{e_1}}\rho \\ 
+     \theta &{}={}&& \transfer{e}{\rho'}\,u \\ 
+     \theta_1 &{}={}&& \liftqm{\letup{\tau_1}{e_1}}{\theta(x_1)}
+  \end{alignat*}
 \end{frame}
 
-\begin{frame}{Links}
-\begin{itemize}
-  \item \href{http://beza1e1.tuxen.de/articles/technical_presentation.html}{9 Tips how to give a technical presentation}
-  \item \href{http://andreas-zeller.blogspot.de/2013/10/summarizing-your-presentation-with.html}{Summarizing your presentation with miniature slides}
-  \item \href{https://www.cs.cmu.edu/~kayvonf/misc/cleartalktips.pdf}{Tips for Giving Clear Talks}
-\end{itemize}
+\begin{frame}[fragile]{Recovering Call Arity}
+  \begin{itemize}
+    \item Observation: (Safe) $\eta$-expansion does not change how an expression is used
+    \item Perform $\eta$-Expansion based on Usage results $n*u$
+  \end{itemize}
+  \begin{overprint}
+    \onslide<1>
+    \[
+      \begin{array}{lcl}
+        \expand_{\sUsage}                              &\,\colon& \sUsage \to \mathbb{N} \to \mathbb{N} \\
+        \expand_{\sUsage}\,A\,\alpha                   &    =   & \alpha \\
+        \expand_{\sUsage}\,(\omega*\uscore[u])\,0      &    =   & 0 \\
+        \expand_{\sUsage}\,(\uscore[\omega]*u)\,\alpha &    =   & \expand_{\sUse}\,u\,\alpha \\
+        \\
+        \expand_{\sUse}                                &\,\colon& \sUse \to \mathbb{N} \to \mathbb{N} \\
+        \expand_{\sUse}\,C^\omega(u)\,0                &    =   & 0 \\
+        \expand_{\sUse}\,C^{\uscore}(u)\,\alpha        &    =   & 1 + \expand_{\sUsage}\,u\,(\max\,0\,(\alpha - 1)) \\
+        \expand_{\sUse}\,\uscore\,\alpha               &    =   & \alpha \\
+      \end{array}
+    \]
+
+    \onslide<2>
+    \begin{center}
+      \begin{minipage}[t][10cm][t]{0.5\textwidth}
+        \begin{haskell}
+          let f x =   -- $\omega*C^\omega(C^{\color{red} 1}(U))$
+                if b
+                then \y -> y
+                else \y -> y*x
+          in f 1 2 + f 4 5
+        \end{haskell}
+      \end{minipage}
+    \end{center}
+
+    \onslide<3>
+    \begin{center}
+      \begin{minipage}{0.5\textwidth}
+        \begin{haskell*}{escapeinside=||}
+          let f x |\color{mygreen}\texttt{y}| = -- $\omega*C^\omega(C^1(U))$
+                if b
+                then y
+                else y*x
+          in f 1 2 + f 4 5
+        \end{haskell*}
+      \end{minipage}
+    \end{center}
+
+    \onslide<4>
+    \begin{center}
+      \begin{minipage}{0.5\textwidth}
+        \begin{haskell}
+          let t =     -- ${\color{red} \omega}*C^\omega(C^1(U))$
+                if b
+                then \x y -> y
+                else \x y -> y*x 
+          in t 1 2 + t1 4 5
+        \end{haskell}
+      \end{minipage}
+    \end{center}
+
+    \onslide<5>
+    \begin{center}
+      \begin{minipage}{0.5\textwidth}
+        \begin{haskell}
+          let t =     -- ${\color{red} 1}*C^1(C^1(U))$
+                if b
+                then \x y -> y
+                else \x y -> y*x 
+          in t 1 2
+        \end{haskell}
+      \end{minipage}
+    \end{center}
+
+    \onslide<6>
+    \begin{center}
+      \begin{minipage}{0.5\textwidth}
+        \begin{haskell}
+          let t =     -- $1*C^{\color{red} 1}(C^1(U))$
+                if b
+                then \x y -> y
+                else \x y -> y*x 
+          in t 1 2
+        \end{haskell}
+      \end{minipage}
+    \end{center}
+
+    \onslide<7>
+    \begin{center}
+      \begin{minipage}{0.5\textwidth}
+        \begin{haskell*}{escapeinside=||}
+          let t |\color{mygreen}\texttt{x}| =   -- $1*C^1(C^{\color{red} 1}(U))$
+                if b
+                then \y -> y
+                else \y -> y*x 
+          in t 1 2
+        \end{haskell*}
+      \end{minipage}
+    \end{center}
+
+    \onslide<8>
+    \begin{center}
+      \begin{minipage}{0.5\textwidth}
+        \begin{haskell*}{escapeinside=||}
+          let t x |\color{mygreen}\texttt{y}| = -- $1*C^1(C^1(U))$
+                if b
+                then y
+                else y*x
+          in t 1 2
+        \end{haskell*}
+      \end{minipage}
+    \end{center}
+  \end{overprint}
+\end{frame}
+
+\begin{frame}[fragile]{Implementation}
+  \begin{itemize}
+    \item Central part of GHC, changes with many repercussions
+    \item Co-call graphs: Efficient representation of sparse and dense cases
+    \item Solving the data-flow problem through graph-based fixed-point iteration
+    \item Montonicity issues due to a lack of appropriate data structures for monotone maps
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{Evaluation}
+  \begin{overprint}
+    \onslide<1>
+    \begin{itemize}
+      \item Benchmarked two variants, baseline GHC 8.2.1
+        \begin{itemize}
+          \item Full analysis, with co-call graphs
+          \item Without co-call graphs, but with glorified \textsc{LetDn}
+        \end{itemize}
+      \item Measured allocations and executed instructions
+        \begin{itemize}
+          \item Artifact performance on nofib suite
+          \item Compiler performance compiling nofib and stage2 compiler
+        \end{itemize}
+    \end{itemize}
+
+    \onslide<2>
+    \begin{columns}
+      \begin{column}{0.4\textwidth}
+        \begin{itemize}
+          \item No regressions relative to the baseline (technically)
+          \item Co-call graphs didn't influence allocations noticeably
+        \end{itemize}
+      \end{column}
+      \begin{column}{0.6\textwidth}
+        \begin{table}
+          \centering
+          \begin{tabular}{lrr}
+            \toprule
+                    & \multicolumn{2}{c}{Bytes allocated} \\
+                      \cmidrule(lr){2-3}
+            Program & \multicolumn{1}{c}{\varfull} & \multicolumn{1}{c}{\varedges} \\
+            \midrule
+            \input{benchmarks/usage-anal-nofib-table-alloc.tex}
+            \bottomrule
+          \end{tabular}
+        \end{table}
+      \end{column}
+    \end{columns}
+
+    \onslide<3>
+    \begin{columns}
+      \begin{column}{0.4\textwidth}
+        \begin{itemize}
+          \item Wild outliers, unclear why
+          \item Plays out in our favour
+          \item Co-call graphs make a slight difference
+        \end{itemize}
+      \end{column}
+      \begin{column}{0.6\textwidth}
+        \begin{table}
+          \centering
+          \begin{tabular}{lrr}
+            \toprule
+                    & \multicolumn{2}{c}{Instructions executed} \\
+                      \cmidrule(lr){2-3}
+            Program & \multicolumn{1}{c}{\varfull} & \multicolumn{1}{c}{\varedges} \\
+            \midrule
+            \input{benchmarks/usage-anal-nofib-table-instrs.tex}
+            \bottomrule
+          \end{tabular}
+        \end{table}
+      \end{column}
+    \end{columns}
+
+    \onslide<4>
+    \begin{itemize}
+      \item Compiler performance got worse
+        \begin{itemize}
+          \item One run of Call Arity replaced by three runs of our usage analysis
+        \end{itemize}
+      \item GHC stage2 compiler built without optimisations
+      \item Space usage of variant \varfull goes through the roof
+    \end{itemize}
+    \begin{table}
+      \centering
+      \begin{tabular}{lrrrr}
+        \toprule
+                & \multicolumn{2}{c}{Bytes allocated} & \multicolumn{2}{c}{Instructions executed} \\
+                  \cmidrule(lr){2-3} \cmidrule(lr){4-5}
+        Program & \multicolumn{1}{c}{\varfull} & \multicolumn{1}{c}{\varedges} & \multicolumn{1}{c}{\varfull} & \multicolumn{1}{c}{\varedges} \\
+        \midrule
+        \input{benchmarks/usage-anal-nofib-comp-table.tex}
+        \input{benchmarks/usage-anal-ghc-comp-table.tex}
+        \bottomrule
+      \end{tabular}
+    \end{table}
+  \end{overprint}
+\end{frame}
+
+\begin{frame}{Conclusion}
+  \begin{itemize}
+    \item Usage analysis generalising Call Arity and its counterpart in the Demand Analyser
+      \begin{itemize}
+        \item No regressions, but no real improvement either
+      \end{itemize}
+    \item 
+      \texttt{\$ git diff --shortstat ghc-8.2.1-release cocall-full}\\
+      \texttt{52 files changed, 3012 insertions(+), 1053 deletions(-)}
+    \item Future work
+      \begin{itemize}
+        \item `Novel' approach to fixed-point iteration, detached from syntax tree
+        \item Data structure for monotone maps
+        \item Long term: Integration into GHC
+      \end{itemize}
+  \end{itemize}
 \end{frame}
 
 \end{document}

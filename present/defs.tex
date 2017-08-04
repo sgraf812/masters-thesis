@@ -1,3 +1,15 @@
+%Stuff
+
+\newcommand{\cmark}{\ding{51}}%
+\newcommand{\xmark}{\ding{55}}%
+
+% Benchmarks
+
+\newcommand*{\varfull}{\textbf{(1)}\xspace}
+\newcommand*{\varedges}{\textbf{(2)}\xspace}
+\newcommand{\progname}[1]{\texttt{#1}}
+\newcommand{\totalname}[1]{#1}
+\newcommand{\andmore}[1]{\emph{... and #1 more}}
 
 %%% Typographic defs
 
@@ -28,3 +40,69 @@
 
 \newmintinline[hs]{haskell}{}
 \newminted[haskell]{haskell}{linenos,mathescape,texcomments,autogobble}
+
+% Syntax
+\newcommand{\keyword}[1]{\text{\textsf{\textbf{#1}}}}
+\newcommand{\sMkPair}{\text{\textsf{(,)}}}
+\newcommand{\sApp}[2]{#1\,#2}
+\newcommand{\sLam}[2]{\lambda{}#1.\,#2}
+\newcommand{\sLet}[2]{\keyword{let}~#1~\keyword{in}~#2}
+\newcommand{\sLetRec}[2]{\keyword{letrec}~#1~\keyword{in}~#2}
+\newcommand{\sPair}[2]{(#1,#2)}
+\newcommand{\sCase}[4]{\keyword{case}~#1~\keyword{of}~\sPair{#2}{#3}\rightarrow#4}
+\newcommand{\sITE}[3]{\keyword{if}~#1~\keyword{then}~{#2}~\keyword{else}~{#3}}
+
+\newcommand{\bind}{x_1=e_1}
+\newcommand{\binds}{\overline{x_i=e_i}}
+
+% Co-call Graphs
+\newcommand{\edge}[2]{#1\text{---}#2}
+\newcommand{\neighbors}[2]{N_{#1} ({#2})}
+
+% Domain
+
+\newcommand{\sExp}{\text{\textsf{Exp}}}
+\newcommand{\sUse}{\text{\textsf{Use}}}
+\newcommand{\sUsage}{\text{\textsf{Usage}}}
+\newcommand{\sUType}{\text{\textsf{UType}}}
+\newcommand{\sUTrans}{\text{\textsf{UTrans}}}
+\newcommand{\sTransEnv}{\text{\textsf{TransEnv}}}
+
+% Transfer function
+\newcommand{\transfer}[2]{\mathcal{T}\llbracket#1\rrbracket_{#2}}
+\newcommand*{\letupsc}{\textsc{LetUp}\xspace}
+\newcommand*{\letdnsc}{\textsc{LetDn}\xspace}
+\newcommand{\fix}{\keyword{fix}\xspace}
+\newcommand{\up}{\sfop{up}}
+\newcommand{\down}{\sfop{down}}
+
+% Auxiliary
+
+% https://tex.stackexchange.com/a/268475/52414
+\newlength\stextwidth
+\newcommand\makesamewidth[3][c]{%
+  \settowidth{\stextwidth}{#2}%
+  \makebox[\stextwidth][#1]{#3}%
+}
+\newlength\smathtextwidth
+\newcommand\mathmakesamewidth[3][c]{%
+  \settowidth{\smathtextwidth}{$#2$}%
+  \mathmakebox[\smathtextwidth][#1]{#3}%
+}
+\newcommand\mathwithin[2]{%
+  \mathmakesamewidth[c]{#1}{#2}
+}
+
+\definecolor{mygreen}{HTML}{6aa84f}
+\newcommand{\sfop}[1]{\mathsf{#1}}
+\newcommand{\uscore}[1][\mathunderscore]{\mathwithin{#1}{\mathunderscore}}
+\newcommand{\expand}{\sfop{expand}}
+\newcommand{\dom}[1]{\sfop{dom}\,#1}
+\newcommand{\zap}{\sfop{zap}}
+\newcommand{\letup}[2]{#1\!\uparrow_{#2}}
+\newcommand{\letdown}[2]{#1\!\downarrow_{#2}}
+\newcommand{\liftstar}[1]{[#1]^*}
+\newcommand{\liftqm}[1]{[#1]^\sfop{?}}
+\newcommand{\cmblet}[2]{#1\ltimes#2}
+\newcommand{\id}[1]{#1}
+\newcommand{\maplit}[3][\id]{\left[#1{#2\mapsto#3}\right]}

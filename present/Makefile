@@ -1,6 +1,6 @@
 BUILD=build
 BASE=present
-DEPS=$(wildcard *.tex) $(wildcard *.sty)
+DEPS=$(wildcard **.tex) $(wildcard *.sty)
 
 default: $(BASE).pdf
 
