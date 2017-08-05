@@ -24,7 +24,7 @@ We provide a summary of their excellent writing for completenes.
 
 While linear type systems can express single-entry and one-shot annotations quite naturally (modulo the caller \vs callee distiction \parencite{card}), they proved to be too restrictive \parencite{polytype}.
 Nonetheless, this led to a series of papers on type systems, specifically tailored to do usage analysis \parencite{type}.
-\parencite{polytype} identified polymorphism and subtyping to be essential for good results, which in conjunction with an exponentially growing number of annotations needed \parencite{warnsbrough} elicited unacceptable complexity, both in terms of performance and in the implementation.
+\textcite{polytype} identified polymorphism and subtyping to be essential for good results, which in conjunction with an exponentially growing number of annotations needed \parencite{warnsbrough} elicited unacceptable complexity, both in terms of performance and in the implementation.
 
 The main disadvantage of the approach by abstract interpretation is worse approximations across function boundaries.
 \textcite{card} (and therefore our solution) recovers a good deed of that opportunity by computing usage signatures to appropriately analyse first- and second-order functions.
@@ -35,7 +35,7 @@ They conclude that type systems operate similar to \letupsc, which has several d
 Dealing with free variables in a precise manner requires polymorphic effect systems as in \textcite{sharing}, which try to alleviate some of the pain regarding subtyping.
 
 A recent type-based approach by \textcite{verstoep} seemingly originating from his master's thesis \parencite{verstoepthesis}. 
-It offers a similar take at the problem as the Demand Analyser, computing all relevant cardinality information (absence, sharing, strictness, uniquess) in one run.
+It offers a similar take at the problem as the Demand Analyser, computing all relevant cardinality information (absence, sharing, strictness, uniqueness) in one run.
 Strongly inspired by \textcite{warnsbrough}, they differentiate \emph{use} from \emph{demand}, resp. \emph{call use} and \emph{evaluation} in our language (\cf \cref{sec:zoo}), in order to handle \hsinl{seq} appropriately.
 They plan to integrate their work into the Utrecht Haskell Compiler (UHC), the inliner of which doesn't seem to be as aggressive as GHC's.
 According to own claims \parencite{verstoepthesis}, the approach enriches the work of \textcite{warnsbrough} with a combination of polymorphism and polyvariance, also adding an option for uniqueness typing.
