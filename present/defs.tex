@@ -59,14 +59,31 @@
 \newcommand{\edge}[2]{#1\text{---}#2}
 \newcommand{\neighbors}[2]{N_{#1} ({#2})}
 
-% Domain
-
+% Semantic sets
+\newcommand{\sVar}{\text{\textsf{Var}}}
+\newcommand{\sTrue}{\text{\textsf{True}}}
+\newcommand{\sFalse}{\text{\textsf{False}}}
 \newcommand{\sExp}{\text{\textsf{Exp}}}
+\newcommand{\sVal}{\text{\textsf{Val}}}
+\newcommand{\sGraph}{\text{\textsf{Graph}}}
 \newcommand{\sUse}{\text{\textsf{Use}}}
 \newcommand{\sUsage}{\text{\textsf{Usage}}}
+\newcommand{\sMulti}{\text{\textsf{Multi}}}
+\newcommand{\sSig}{\text{\textsf{Sig}}}
+\newcommand{\sUseEnv}{\text{\textsf{UseEnv}}}
 \newcommand{\sUType}{\text{\textsf{UType}}}
 \newcommand{\sUTrans}{\text{\textsf{UTrans}}}
 \newcommand{\sTransEnv}{\text{\textsf{TransEnv}}}
+
+% Lattice
+
+\newcommand{\llub}{\sqcup}
+\newcommand{\lbiglub}{\bigsqcup}
+\newcommand{\lleq}{\sqsubseteq}
+\newcommand{\lless}{\sqsubset}
+\newcommand{\lTriple}[3]{\left\langle{}#1,#2,#3\right\rangle{}}
+\newcommand{\both}{\,\&\,}
+\newcommand{\mto}{\to_{+}}
 
 % Transfer function
 \newcommand{\transfer}[2]{\mathcal{T}\llbracket#1\rrbracket_{#2}}
@@ -104,5 +121,10 @@
 \newcommand{\liftstar}[1]{[#1]^*}
 \newcommand{\liftqm}[1]{[#1]^\sfop{?}}
 \newcommand{\cmblet}[2]{#1\ltimes#2}
+
+% Map Notation
+\newcommand{\pfun}{\rightharpoonup}
+\newcommand{\emptymap}{[]}
 \newcommand{\id}[1]{#1}
 \newcommand{\maplit}[3][\id]{\left[#1{#2\mapsto#3}\right]}
+\newcommand{\restrict}[2]{#1\restriction_{#2}}

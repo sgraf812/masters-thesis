@@ -1,5 +1,5 @@
 \documentclass{beamer}
-\usetheme[deutsch]{KIT}
+\usetheme[englisch]{KIT}
 
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
@@ -15,6 +15,19 @@
 \usepackage{realboxes}
 \usepackage{pifont}
 \usepackage{stmaryrd}
+\usepackage[maxcitenames=2,backend=bibtex8,hyperref=true,style=authoryear]{biblatex}
+\usepackage{hyperref}
+
+\hypersetup{
+  pdfdisplaydoctitle=true,
+  %colorlinks=true, % use this if the boxes around links bother you ;)
+  hidelinks=true,
+  pdfstartpage=3,
+}
+\usepackage{hypcap} % hyperref fix
+\usepackage[nameinlink,noabbrev,capitalise]{cleveref} % better references
+
+\bibliography{bib}
 
 \usetikzlibrary{positioning,calc,arrows,shapes}
 \tikzset{
@@ -136,32 +149,15 @@
   \end{center}
 \end{frame}
 
-\begin{frame}[fragile]{Dead code}
-  \begin{itemize}
-    \item Can replace dead bindings with small traps
-    \begin{itemize} \item Exploits \emph{absence} \end{itemize}
-    \begin{itemize} \item `Never evaluated' (\MaxCard) \end{itemize}
-  \end{itemize}
-  \begin{center}
-    \begin{minipage}{0.5\textwidth}
-      \begin{haskell}
-        main = do
-          let  a    = ...                 -- $[1,\omega]$
-               b    = ...                 -- $[1,1]$
-               c    = ...                 -- $[0,\omega]$
-               d    = ...                 -- $[0,1]$
-               e    = error "e is absent" -- $[0,\mathbf{0}]$
-          print (a + if b then a * d else c * c)
-      \end{haskell}
-    \end{minipage}
-  \end{center}
-\end{frame}
-
 \begin{frame}[fragile]{Usage Analysis}
   \begin{itemize}
     \item \MaxCard analysis, \eg computes $m$ in binding annotations $[n,m]$
-    \item 
-      Related: \emph{one-shot} lambdas
+    \item Related: \emph{one-shot} lambdas
+      \begin{itemize}
+        \item \hs{let} Floating
+        \item $\eta$-Expansion
+        \item Inlining
+      \end{itemize}
   \end{itemize}
   \begin{center}
     \begin{minipage}{0.5\textwidth}
@@ -174,61 +170,6 @@
                     in \|$\mathtt{w}^1$| -> c*d + z*w
           print (f 1 2 + f 4 5 * g 3 42)
       \end{haskell*}
-    \end{minipage}
-  \end{center}
-\end{frame}
-
-% Proably backup, also useful to explain inlining
-\begin{frame}[fragile]{Floating}
-  \begin{itemize}
-    \item Floating bindings in and out of expressions
-    \item Floating into a lambda possibly duplicates work!
-    \item Not so with one-shot lambdas
-  \end{itemize}
-  \begin{center}
-    \begin{minipage}{0.5\textwidth}
-      \begin{overprint}
-        \onslide<1>
-        \begin{haskell*}{escapeinside=||}
-          main = do        
-            let c = ...
-                f = \|$\mathtt{x}^\omega$| |$\mathtt{y}^1$| -> c*x + y
-                g = \|$\mathtt{z}^1$| -> 
-                      let d = ... 
-                      in \|$\mathtt{w}^1$| -> c*d + z*w
-            print (f 1 2 + f 4 5 * g 3 42)
-        \end{haskell*}
-        \onslide<2>
-        \begin{haskell*}{escapeinside=||}
-          main = do        
-            let |\color{red}\texttt{c}| = ...
-                f = \|$\mathtt{x}^{\color{red} \omega}$| |$\mathtt{y}^1$| -> |\color{red}\texttt{c}|*x + y
-                g = \|$\mathtt{z}^1$| -> 
-                      let d = ... 
-                      in \|$\mathtt{w}^1$| -> |\color{red}\texttt{c}|*d + z*w
-            print (f 1 2 + f 4 5 * g 3 42)
-        \end{haskell*}
-        \onslide<3>
-        \begin{haskell*}{escapeinside=||}
-          main = do        
-            let c = ...
-                f = \|$\mathtt{x}^\omega$| |$\mathtt{y}^1$| -> c*x + y
-                g = \|$\mathtt{z}^1$| -> 
-                      let |\color{red}\texttt{d}| = ... 
-                      in \|$\mathtt{w}^1$| -> c*|\color{red}\texttt{d}| + z*w
-            print (f 1 2 + f 4 5 * g 3 42)
-        \end{haskell*}
-        \onslide<4>
-        \begin{haskell*}{escapeinside=||}
-          main = do        
-            let c = ...
-                f = \|$\mathtt{x}^\omega$| |$\mathtt{y}^1$| -> c*x + y
-                g = \|$\mathtt{z}^1$| |$\mathtt{w}^1$| -> 
-                      let |\color{red}\texttt{d}| = ... 
-                      in c*|\color{red}\texttt{d}| + z*w
-            print (f 1 2 + f 4 5 * g 3 42)
-        \end{haskell*}
-      \end{overprint}
     \end{minipage}
   \end{center}
 \end{frame}
@@ -252,7 +193,7 @@
         \onslide<2>
         \begin{haskell*}{escapeinside=||}
           main = do        
-            let g = \|$\mathtt{z}^1$| \|\color{red}$\mathtt{w}^1$| -> 
+            let g = \|$\mathtt{z}^1$| |\color{red}$\mathtt{w}^1$| -> 
                       let d = ... 
                       in d + z*w
             print (g 3 42)
@@ -263,88 +204,82 @@
 \end{frame}
 
 \begin{frame}[fragile]{Demand Analyser}
-  \begin{overprint}
-    \onslide<1>
-    \begin{itemize}
-      \item A cardinality analysis
-      \item Usage analysis identifies
-        \begin{itemize}
-          \item Single-entry thunks
-          \item One-shot lambdas
-          \item Dead code
-        \end{itemize}
-      \item Computes how an expression uses its free variables
-    \end{itemize}
+  \begin{itemize}
+    \item A cardinality analysis
+    \item Usage analysis identifies
+      \begin{itemize}
+        \item Single-entry thunks
+        \item One-shot lambdas
+        \item Dead code
+      \end{itemize}
+    \item Computes how an expression uses its free variables
+  \end{itemize}
+\end{frame}
 
-    \onslide<2>
-    \begin{itemize}
-      \item Call Uses
-        \begin{itemize}
-          \item Identification of one-shot lambdas needs tracking of \emph{how} a binding was used
-          \item Introduces \newdef{call uses} $C^n(u)$
-          \item \hs{f 1 2} exposes \hs{f} to usage $1*C^1(C^1(U))$
-          \item \hs{f 1 2 + f 4 5} exposes \hs{f} to usage $\omega*C^\omega(C^1(U))$
-        \end{itemize}
-    \end{itemize}
-    \begin{center}
-      \begin{minipage}{0.5\textwidth}
-        \begin{haskell*}{escapeinside=||}
-          let f |$\mathtt{x}^\omega$| |$\mathtt{y}^1$| = ...
-          in f 1 2 + f 4 5
-        \end{haskell*}
-      \end{minipage}
-    \end{center}
+\begin{frame}[fragile]{Demand Analyser}
+  \framesubtitle{Call Uses}
+  \begin{itemize}
+    \item Identification of one-shot lambdas needs tracking of \emph{how} a binding was used
+    \item Introduces \newdef{call uses} $C^n(u)$ in addition to the unknown use $U$
+    \item \hs{f 1 2} exposes \hs{f} to usage $1*C^1(C^1(U))$
+    \item \hs{f 1 2 + f 4 5} exposes \hs{f} to usage $\omega*C^\omega(C^1(U))$
+  \end{itemize}
+  \begin{center}
+    \begin{minipage}{0.5\textwidth}
+      \begin{haskell*}{escapeinside=||}
+        let f |$\mathtt{x}^\omega$| |$\mathtt{y}^1$| = ...
+        in f 1 2 + f 4 5
+      \end{haskell*}
+    \end{minipage}
+  \end{center}
+\end{frame}
 
-    \onslide<3>
-    \begin{itemize}
-      \item Usage Signatures
-        \begin{itemize}
-          \item Interprocedural data-flow
-          \item \hs{const} has \newdef{usage signature} $1*U \to A \to \bullet$
-          \item \hs{y} is used once, $1*U$
-          \item \hs{fac 1000} is dead code ($A$ for absent, \eg never used)
-          \item Usage signature + free variable usage = \newdef{usage type}
-          \item Looks at the definition of \hs{const} before the \hs{let} body!
-            \begin{itemize} 
-              \item \textsc{LetDn} rule: Unleashes usage types of \hs{const} at call sites
-            \end{itemize}
-        \end{itemize}
-    \end{itemize}
-    \begin{center}
-      \begin{minipage}{0.5\textwidth}
-        \begin{haskell*}{escapeinside=||}
-          let const a b = a
-          in const y (fac 1000)
-        \end{haskell*}
-      \end{minipage}
-    \end{center}
+\begin{frame}[fragile]{Demand Analyser}
+  \framesubtitle{Usage Signatures}
+  \begin{itemize}
+    \item Interprocedural data-flow
+    \item Usage signature + free variable usage = \newdef{usage type}
+    \item Looks at the definition of \hs{const} before the \hs{let} body!
+      \begin{itemize} 
+        \item \textsc{LetDn} rule: Unleashes usage types of \hs{const} at call sites
+      \end{itemize}
+  \end{itemize}
 
-    \onslide<4>
-    \begin{itemize}
-      \item Thunks
-        \begin{itemize}
-          \item \hs{x} is only used once, its evaluation in \hs{y}'s right-hand side is shared!
-          \item 
-            Two use sites 
-            \begin{itemize} 
-              \item \textsc{LetDn}-style leads to usage of $\omega*U$ on \hs{x}! 
-            \end{itemize}
-          \item Solution: \textsc{LetUp} for thunks
-            \begin{itemize} 
-              \item Record usage $\omega*U$ of \hs{y} in the body of the \hs{let}
-              \item Analyse \hs{y}'s bound expression in use $U$, unleash its usage type
-            \end{itemize}
-        \end{itemize}
-    \end{itemize}
-    \begin{center}
-      \begin{minipage}{0.5\textwidth}
-        \begin{haskell*}{escapeinside=||}
-          let y = 2*x
-          in y + y
-        \end{haskell*}
-      \end{minipage}
-    \end{center}
- \end{overprint}
+  \begin{center}
+    \begin{minipage}{0.5\textwidth}
+      \begin{haskell}
+        let const a b = a -- $\mathtt{const} :: 1*U \to A \to \bullet$
+        in const 
+            y             -- $1*U$
+            (fac 1000)    -- $A$
+      \end{haskell}
+    \end{minipage}
+  \end{center}
+\end{frame}
+
+\begin{frame}[fragile]{Demand Analyser}
+  \framesubtitle{Thunks}
+  \begin{itemize}
+    \item \hs{x} is only used once, its evaluation in \hs{y}'s right-hand side is shared!
+    \item 
+      Two use sites 
+      \begin{itemize} 
+        \item \textsc{LetDn}-style leads to usage of $\omega*U$ on \hs{x}! 
+      \end{itemize}
+    \item Solution: \textsc{LetUp} for thunks
+      \begin{itemize} 
+        \item Record usage $\omega*U$ of \hs{y} in the body of the \hs{let}
+        \item Analyse \hs{y}'s bound expression in use $U$, unleash its usage type
+      \end{itemize}
+  \end{itemize}
+  \begin{center}
+    \begin{minipage}{0.5\textwidth}
+      \begin{haskell*}{escapeinside=||}
+        let y = 2*x
+        in y + y
+      \end{haskell*}
+    \end{minipage}
+  \end{center}
 \end{frame}
 
 \begin{frame}[fragile]{Call Arity}
@@ -355,6 +290,45 @@
       \item \hs{f} is always called with two arguments
       \item<2> \hs{f}'s bound expression can be $\eta$-expanded!
     \end{itemize}
+
+    \onslide<2>
+    \begin{itemize}
+      \item $\eta$-expansion based on usage information
+      \item \hs{f} is always called with two arguments
+      \item<2> \hs{f}'s bound expression can be $\eta$-expanded!
+    \end{itemize}
+
+    \onslide<3>
+    \begin{itemize}
+      \item Can we $\eta$-expand \hs{f} here?
+      \item \hs{f} is always called with two arguments
+    \end{itemize}
+
+    \onslide<4>
+    \begin{itemize}
+      \item Can we $\eta$-expand \hs{f} here?
+      \item \hs{f} is always called with two arguments
+      \item ... but \hs{f} is also a thunk
+      \item $\eta$-expansion would duplicate the \hs{expensive} check!
+    \end{itemize}
+
+    \onslide<5>
+    \begin{itemize}
+      \item Can we $\eta$-expand \hs{f} here?
+      \item \hs{f} is a thunk, called with two arguments
+    \end{itemize}
+
+    \onslide<6>
+    \begin{itemize}
+      \item Can we $\eta$-expand \hs{f} here?
+      \item \hs{f} is a thunk, called with two arguments
+      \item Since \hs{f} is only \emph{called once}, $\eta$-expansion is safe
+      % Also demnostrates why we can't generally just inline \hs{f}
+    \end{itemize}
+  \end{overprint}
+
+  \begin{overprint}
+    \onslide<1>
     \begin{center}
       \begin{minipage}{0.5\textwidth}
         \begin{haskell}
@@ -368,11 +342,6 @@
     \end{center}
 
     \onslide<2>
-    \begin{itemize}
-      \item $\eta$-expansion based on usage information
-      \item \hs{f} is always called with two arguments
-      \item<2> \hs{f}'s bound expression can be $\eta$-expanded!
-    \end{itemize}
     \begin{center}
       \begin{minipage}{0.5\textwidth}
         \begin{haskell}
@@ -386,12 +355,6 @@
     \end{center}
 
     \onslide<3>
-    \begin{itemize}
-      \item Can we $\eta$-expand \hs{f} here?
-      \item \hs{f} is always called with two arguments
-      \item<4> ... but \hs{f} is also a thunk! 
-      \item<4> $\eta$-expansion would duplicate the \hs{expensive} check!
-    \end{itemize}
     \begin{center}
       \begin{minipage}{0.5\textwidth}
         \begin{haskell}
@@ -405,12 +368,6 @@
     \end{center}
 
     \onslide<4>
-    \begin{itemize}
-      \item Can we $\eta$-expand \hs{f} here?
-      \item \hs{f} is always called with two arguments
-      \item<4> ... but \hs{f} is also a thunk
-      \item<4> $\eta$-expansion would duplicate the \hs{expensive} check!
-    \end{itemize}
     \begin{center}
       \begin{minipage}{0.5\textwidth}
         \begin{haskell}
@@ -424,11 +381,6 @@
     \end{center}
 
     \onslide<5>
-    \begin{itemize}
-      \item Can we $\eta$-expand \hs{f} here?
-      \item \hs{f} is a thunk, called with two arguments
-      \item<6> Since \hs{f} is \emph{called} only \emph{once}, $\eta$-expansion is safe
-    \end{itemize}
     \begin{center}
       \begin{minipage}{0.5\textwidth}
         \begin{haskell}
@@ -442,12 +394,6 @@
     \end{center}
 
     \onslide<6>
-    \begin{itemize}
-      \item Can we $\eta$-expand \hs{f} here?
-      \item \hs{f} is a thunk, called with two arguments
-      \item<6> Since \hs{f} is only \emph{called once}, $\eta$-expansion is safe
-      % Also demnostrates why we can't generally just inline \hs{f}
-    \end{itemize}
     \begin{center}
       \begin{minipage}{0.5\textwidth}
         \begin{haskell}
@@ -459,8 +405,13 @@
         \end{haskell}
       \end{minipage}
     \end{center}
+  \end{overprint}
+\end{frame}
 
-    \onslide<7>
+\begin{frame}[fragile]{Call Arity}
+  \framesubtitle{Co-call Graphs}
+  \begin{overprint}
+    \onslide<1>
     \begin{itemize}
       \item Called-once information is tracked by a usage analysis
       \item Analyses \hs{let} body before bound expression, bottom-up, like \textsc{LetUp}
@@ -470,19 +421,8 @@
           \item Analysis reports \hs{x} to be used multiple times
         \end{itemize}
     \end{itemize}
-    \begin{center}
-      \begin{minipage}{0.5\textwidth}
-        \begin{haskell}
-          let x = ...  
-          in let y = 2*x
-             in if b
-                then x
-                else y
-        \end{haskell}
-      \end{minipage}
-    \end{center}
 
-    \onslide<8>
+    \onslide<2>
     \begin{itemize}
       \item \emph{Co-call graphs} track control flow information
         \begin{itemize}
@@ -492,28 +432,8 @@
         \end{itemize}
       \item Lack of edge between \hs{x} and \hs{y} avoids self-edge on \hs{x}
     \end{itemize}
-    \begin{columns}
-      \begin{column}{0\textwidth}
-        \begin{haskell}
-          let x = ...  
-          in let y = 2*x
-             in if b
-                then x
-                else y
-        \end{haskell}
-      \end{column}
-      \begin{column}{0\textwidth}
-        \begin{tikzpicture}
-          \node at (0,0) (0) {\hs{b}};
-          \node at (1,0.3) (1) {\hs{x}};
-          \node at (1,-0.3) (2) {\hs{y}};
-          \draw (0) -- (1);
-          \draw (0) -- (2);
-        \end{tikzpicture}
-      \end{column}
-    \end{columns}
 
-    \onslide<9>
+    \onslide<3>
     \begin{itemize}
       \item \emph{Co-call graphs} track control flow information
         \begin{itemize}
@@ -523,28 +443,8 @@
         \end{itemize}
       \item Lack of edge between \hs{x} and \hs{y} avoids self-edge on \hs{x}
     \end{itemize}
-    \begin{columns}
-      \begin{column}{0\textwidth}
-        \begin{haskell}
-          let x = ...  
-          in let y = 2*x
-             in if b
-                then x
-                else y
-        \end{haskell}
-      \end{column}
-      \begin{column}{0\textwidth}
-        \begin{tikzpicture}
-          \node at (0,0) (0) {\hs{b}};
-          \node at (1,0.3) (1) {\hs{x}};
-          \node at (1,-0.3) (2) {\color{red}\texttt{x}};
-          \draw (0) -- (1);
-          \draw (0) -- (2);
-        \end{tikzpicture}
-      \end{column}
-    \end{columns}
 
-    \onslide<10>
+    \onslide<4>
     \begin{itemize}
       \item \emph{Co-call graphs} track control flow information
         \begin{itemize}
@@ -554,25 +454,47 @@
         \end{itemize}
       \item Lack of edge between \hs{x} and \hs{y} avoids self-edge on \hs{x}
     \end{itemize}
-    \begin{columns}
-      \begin{column}{0\textwidth}
-        \begin{haskell}
-          let x = ...  
-          in let y = 2*x
-             in if b
-                then x
-                else y
-        \end{haskell}
-      \end{column}
-      \begin{column}{0\textwidth}
+  \end{overprint}
+
+  \begin{columns}
+    \begin{column}{0\textwidth}
+      \begin{haskell}
+        let x = ...  
+        in let y = 2*x
+           in if b
+              then x
+              else y
+      \end{haskell}
+    \end{column}
+    \begin{column}{0\textwidth}
+      \begin{overprint}
+        \onslide<2>
+        \begin{tikzpicture}
+          \node at (0,0) (0) {\hs{b}};
+          \node at (1,0.3) (1) {\hs{x}};
+          \node at (1,-0.3) (2) {\hs{y}};
+          \draw (0) -- (1);
+          \draw (0) -- (2);
+        \end{tikzpicture}
+
+        \onslide<3>
+        \begin{tikzpicture}
+          \node at (0,0) (0) {\hs{b}};
+          \node at (1,0.3) (1) {\hs{x}};
+          \node at (1,-0.3) (2) {\color{red}\texttt{x}};
+          \draw (0) -- (1);
+          \draw (0) -- (2);
+        \end{tikzpicture}
+
+        \onslide<4>
         \begin{tikzpicture}
           \node at (0,0) (0) {\hs{b}};
           \node at (1,0) (1) {\hs{x}};
           \draw (0) -- (1);
         \end{tikzpicture}
-      \end{column}
-    \end{columns}
-  \end{overprint}
+      \end{overprint}
+    \end{column}
+  \end{columns}
 \end{frame}
 
 \begin{frame}{Combined Usage Analysis}
@@ -588,23 +510,10 @@
     \onslide<1>
     \begin{itemize}
       \item Free variable \hs{z} is used only once
-      \item Recall: Demand Analysis unleashes function bindings top-down (\textsc{LetDn})
+      \item Recall: Demand Analysis analyses function bindings top-down (\textsc{LetDn})
       \item \textsc{LetDn} only digests \hs{f} for manifest arity 1, can't look under lambda
       \item \hs{f} is called with 2 arguments, $C^1(C^1(U))$
-      \item[\xmark] Demand Analysis: \hs{z} is annotated as used multiple times
-      \item[\cmark] Call Arity (\textsc{LetUp}): Arity information flows bottom-up, \hs{z} used once
     \end{itemize}
-    \begin{center}
-      \begin{minipage}{0.5\textwidth}
-        \begin{haskell*}{escapeinside=||}
-          let f x = 
-                if expensive
-                then \y -> y*|\color{red}\texttt{z}|
-                else \y -> y*x
-          in f 1 2
-        \end{haskell*}
-      \end{minipage}
-    \end{center}
 
     \onslide<2>
     \begin{itemize}
@@ -612,18 +521,19 @@
       \item[\cmark] Call Arity (\textsc{LetUp}): Arity information flows bottom-up, \hs{z} used once
       \item Solution: Analyse bound function on demand, when we know specific call use 
     \end{itemize}
-    \begin{center}
-      \begin{minipage}{0.5\textwidth}
-        \begin{haskell*}{escapeinside=||}
-          let f x = 
-                if expensive
-                then \y -> y*|\color{red}\texttt{z}|
-                else \y -> y*x
-          in f 1 2
-        \end{haskell*}
-      \end{minipage}
-    \end{center}
   \end{overprint}
+
+  \begin{center}
+    \begin{minipage}{0.5\textwidth}
+      \begin{haskell*}{escapeinside=||}
+        let f x = 
+              if expensive
+              then \y -> y*|\color{red}\texttt{z}|
+              else \y -> y*x
+        in f 1 2
+      \end{haskell*}
+    \end{minipage}
+  \end{center}
 \end{frame}
 
 \begin{frame}[fragile]{Combined Usage Analysis}
@@ -719,7 +629,7 @@
                 if b
                 then \x y -> y
                 else \x y -> y*x 
-          in t 1 2 + t1 4 5
+          in t 1 2 + t 4 5
         \end{haskell}
       \end{minipage}
     \end{center}
@@ -783,7 +693,7 @@
     \item Central part of GHC, changes with many repercussions
     \item Co-call graphs: Efficient representation of sparse and dense cases
     \item Solving the data-flow problem through graph-based fixed-point iteration
-    \item Montonicity issues due to a lack of appropriate data structures for monotone maps
+    \item Monotonicity issues due to a lack of appropriate data structures for monotone maps
   \end{itemize}
 \end{frame}
 
@@ -793,13 +703,13 @@
     \begin{itemize}
       \item Benchmarked two variants, baseline GHC 8.2.1
         \begin{itemize}
-          \item Full analysis, with co-call graphs
+          \item Full analysis \varfull, with co-call graphs \varedges
           \item Without co-call graphs, but with glorified \textsc{LetDn}
         \end{itemize}
       \item Measured allocations and executed instructions
         \begin{itemize}
           \item Artifact performance on nofib suite
-          \item Compiler performance compiling nofib and stage2 compiler
+          \item Compiler performance compiling nofib and stage 2 compiler
         \end{itemize}
     \end{itemize}
 
@@ -858,8 +768,10 @@
         \begin{itemize}
           \item One run of Call Arity replaced by three runs of our usage analysis
         \end{itemize}
-      \item GHC stage2 compiler built without optimisations
-      \item Space usage of variant \varfull goes through the roof
+      \item GHC stage 2 compiler built without optimisations
+        \begin{itemize}
+          \item Space usage of variant \varfull goes through the roof for some inputs
+        \end{itemize}
     \end{itemize}
     \begin{table}
       \centering
@@ -877,6 +789,23 @@
   \end{overprint}
 \end{frame}
 
+\begin{frame}{Related Work}
+  \begin{itemize}
+    \item Abstract Interpretation
+      \begin{itemize}
+        \item Call Arity \parencite{callarity}
+        \item Demand Analysis \parencite{card}
+        \item 80's and 90's: Projection-based strictness analysis \parencite{projs,projimpl}
+      \end{itemize}
+    \item Type Systems
+      \begin{itemize}
+        \item Linear/Uniqueness types
+        \item 90's until today
+        \item Polymorphism, subtyping, data type annotations problematic for performance \parencite{card}
+      \end{itemize}
+  \end{itemize}
+\end{frame}
+
 \begin{frame}{Conclusion}
   \begin{itemize}
     \item Usage analysis generalising Call Arity and its counterpart in the Demand Analyser
@@ -884,7 +813,7 @@
         \item No regressions, but no real improvement either
       \end{itemize}
     \item 
-      \texttt{\$ git diff --shortstat ghc-8.2.1-release cocall-full}\\
+      \texttt{\$ git diff -{}-shortstat ghc-8.2.1-release cocall-full}\\
       \texttt{52 files changed, 3012 insertions(+), 1053 deletions(-)}
     \item Future work
       \begin{itemize}
@@ -893,6 +822,218 @@
         \item Long term: Integration into GHC
       \end{itemize}
   \end{itemize}
+\end{frame}
+
+\begin{frame}[shrink=15]{Bibliography} 
+  \printbibliography
+\end{frame}
+
+\setbeamertemplate{section page}{%
+  \begin{centering}
+  \begin{beamercolorbox}[sep=12pt,center]{part title}
+  \usebeamerfont{section title}\insertsection\par
+  \end{beamercolorbox}
+  \end{centering}
+}
+\section{Backup}
+\frame{\sectionpage}
+
+\begin{frame}[fragile]{Dead code}
+  \begin{itemize}
+    \item Can replace dead bindings with small traps
+    \begin{itemize} \item Exploits \emph{absence} \end{itemize}
+    \begin{itemize} \item `Never evaluated' (\MaxCard) \end{itemize}
+  \end{itemize}
+  \begin{center}
+    \begin{minipage}{0.5\textwidth}
+      \begin{haskell}
+        main = do
+          let  a    = ...                 -- $[1,\omega]$
+               b    = ...                 -- $[1,1]$
+               c    = ...                 -- $[0,\omega]$
+               d    = ...                 -- $[0,1]$
+               e    = error "e is absent" -- $[0,\mathbf{0}]$
+          print (a + if b then a * d else c * c)
+      \end{haskell}
+    \end{minipage}
+  \end{center}
+\end{frame}
+
+% Proably backup, also useful to explain inlining
+\begin{frame}[fragile]{Floating}
+  \begin{itemize}
+    \item Floating bindings in and out of expressions
+    \item Floating into a lambda possibly duplicates work!
+    \item Not so with one-shot lambdas
+  \end{itemize}
+  \begin{center}
+    \begin{minipage}{0.5\textwidth}
+      \begin{overprint}
+        \onslide<1>
+        \begin{haskell*}{escapeinside=||}
+          main = do        
+            let c = ...
+                f = \|$\mathtt{x}^\omega$| |$\mathtt{y}^1$| -> c*x + y
+                g = \|$\mathtt{z}^1$| -> 
+                      let d = ... 
+                      in \|$\mathtt{w}^1$| -> c*d + z*w
+            print (f 1 2 + f 4 5 * g 3 42)
+        \end{haskell*}
+        \onslide<2>
+        \begin{haskell*}{escapeinside=||}
+          main = do        
+            let |\color{red}\texttt{c}| = ...
+                f = \|$\mathtt{x}^{\color{red} \omega}$| |$\mathtt{y}^1$| -> |\color{red}\texttt{c}|*x + y
+                g = \|$\mathtt{z}^1$| -> 
+                      let d = ... 
+                      in \|$\mathtt{w}^1$| -> |\color{red}\texttt{c}|*d + z*w
+            print (f 1 2 + f 4 5 * g 3 42)
+        \end{haskell*}
+        \onslide<3>
+        \begin{haskell*}{escapeinside=||}
+          main = do        
+            let c = ...
+                f = \|$\mathtt{x}^\omega$| |$\mathtt{y}^1$| -> c*x + y
+                g = \|$\mathtt{z}^1$| -> 
+                      let |\color{red}\texttt{d}| = ... 
+                      in \|$\mathtt{w}^1$| -> c*|\color{red}\texttt{d}| + z*w
+            print (f 1 2 + f 4 5 * g 3 42)
+        \end{haskell*}
+        \onslide<4>
+        \begin{haskell*}{escapeinside=||}
+          main = do        
+            let c = ...
+                f = \|$\mathtt{x}^\omega$| |$\mathtt{y}^1$| -> c*x + y
+                g = \|$\mathtt{z}^1$| |$\mathtt{w}^1$| -> 
+                      let |\color{red}\texttt{d}| = ... 
+                      in c*|\color{red}\texttt{d}| + z*w
+            print (f 1 2 + f 4 5 * g 3 42)
+        \end{haskell*}
+      \end{overprint}
+    \end{minipage}
+  \end{center}
+\end{frame}
+
+\begin{frame}[fragile]{\letupsc and \hs{seq}}
+  \begin{center}
+    \begin{minipage}{0.4\textwidth}
+      \begin{haskell}
+        let f = 
+              if expensive
+              then id
+              else (*2)
+        in let x = f 0
+           in if b
+              then f `seq` x
+              else f 0
+      \end{haskell}
+    \end{minipage}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Lambda Abstraction, Application, Variables}
+  \[
+  \transfer{\sLam{x}{e}}{\rho}\,u =
+    \begin{cases}
+      \lTriple{\emptyset}{\emptymap}{\bot}, & \text{when } u = HU \\
+      n*\lTriple{\gamma\setminus_x}{\varphi\setminus_x}{\theta(x) \to \sigma}, & \text{where } 
+        \begin{array}{l}
+          u \lleq C^n(u_b), \\
+          \lTriple{\gamma}{\varphi}{\sigma} = \theta = \transfer{e}{\rho}\,u_b
+        \end{array}
+    \end{cases}
+  \]
+
+\begin{alignat*}{2}
+  \transfer{\sApp{e}{x}}{\rho}\,u &=&& \lTriple{\gamma_e}{\varphi_e}{\sigma} \both \liftstar{\transfer{x}{\rho}}\,u^* \\
+  &\rlap{ where $\lTriple{\gamma_e}{\varphi_e}{u^* \to \sigma} = \transfer{e}{\rho}\,C^1(u)$} &&\\
+\end{alignat*}
+\begin{alignat*}{2}
+&\liftstar{\uscore[\tau]}~A &{}={}& \lTriple{\emptyset}{\emptymap}{\bot} \\
+&\liftstar{\tau}~(n*u)      &{}={}& n*(\tau~u)
+\end{alignat*}
+
+  \[
+  \transfer{x}{\rho} =
+    \begin{cases}
+      \rho(x) \both \tau^1_x, & \text{when } x\in \dom{\rho} \\
+      \tau^1_x, & \text{otherwise}
+    \end{cases}
+  \]
+  \[
+  \tau^1_x~u = \lTriple{\emptyset}{\maplit{x}{u}}{\top}
+  \]
+\end{frame}
+
+\begin{frame}{Recursive Let}
+  \begin{alignat*}{2}
+    \transfer{\sLet{\binds}{e}}{\rho}\,u &{}={}&& (\fix\,\up) \setminus_{\overline{x_i}} \\
+    \text{where} \\
+     \up\,\theta &{}={}&& \cmblet{(\transfer{e}{\rho'}\,u \llub \theta)}{\maplit[\overline]{x_i}{\theta_i}} \\
+     \overline{\theta_i} &{}={}&& \overline{\liftqm{\letup{\transfer{e_i}{\rho'}}{e_i}}{(\theta(x_i) \both \theta(x_i))}} \\
+     \rho' &{}={}&& \fix\,\down \\
+     \down\,\rho' &{}={}&& \maplit[\overline]{x_i}{\letdown{\transfer{e_i}{\rho \llub \rho'}}{e_i}}\rho \\ 
+  \end{alignat*}
+  \begin{alignat*}{2}
+  &\liftqm{\uscore[\tau]}~A     &{}={}& \lTriple{\emptyset}{\emptymap}{\bot} \\
+  &\liftqm{\tau}~(\uscore[n]*u) &{}={}& \tau~u
+  \end{alignat*}
+\end{frame}
+
+\begin{frame}{\letupsc/\letdnsc}
+\begin{alignat*}{1}
+&\zap~{}\colon\sUType \to \sUType \\
+&\zap~\lTriple{\uscore}{\uscore}{\sigma} = \lTriple{\emptyset}{\emptymap}{\sigma}
+\end{alignat*}
+\begin{alignat*}{2}
+  &\letup{\uscore[\tau]}{\uscore[e]} &\mathmakesamewidth[c]{{}=}{\colon} &\sUTrans \to \sExp \to \sUTrans \\
+  &\letup{\tau}{e} &{}={}&
+  \begin{cases}
+    \zap\circ\tau, & \text{when } e \text{ is in WHNF} \\
+    \tau, & \text{otherwise}
+  \end{cases} \\
+\\
+  &\letdown{\uscore[\tau]}{\uscore[e]} &\mathmakesamewidth[c]{{}=}{\colon} &\sUTrans \to \sExp \to \sUTrans \\
+  &\letdown{\tau}{e} &{}={}&
+  \begin{cases}
+    \zap, & \text{when } e \text{ is in WHNF} \\
+    \zap\circ\tau, & \text{otherwise}
+  \end{cases}
+\end{alignat*}
+\end{frame}
+
+
+\begin{frame}{Graph Substitution}
+  \begin{alignat*}{2}
+    \cmblet{\uscore[\theta]}{\mathmakesamewidth[l]{\maplit{x_i}{\lTriple{\gamma_i}{\varphi_i}{\uscore}}\mu}{\uscore[\emptymap]}} &\mathmakesamewidth[c]{~~=}\colon &&\sUType \to (\sVar \pfun \sUType) \to \sUType \\
+    \cmblet{\theta}{\mathmakesamewidth[l]{\maplit{x_i}{\lTriple{\gamma_i}{\varphi_i}{\uscore}}\mu}{\emptymap}} &{}={}&& \theta \\
+    \cmblet{\theta}{\maplit{x_i}{\lTriple{\gamma_i}{\varphi_i}{\uscore}}\mu} &{}={}&& \lTriple{\gamma}{\varphi}{\sigma} \\
+    \text{where} \\ 
+      \lTriple{\gamma'}{\varphi'}{\sigma} &{}={}&& \cmblet{\theta}{\mu} \\ 
+      N &{}={}&& \neighbors{x_i}{\gamma'} \\
+      \gamma &{}={}&& \gamma' \llub \gamma_i \llub (N \times \dom{\varphi_i}) \\
+      \varphi &{}={}&& \varphi' \llub \varphi_i \llub (\restrict{\varphi'}{N}\both \varphi_i)
+  \end{alignat*}
+\end{frame}
+
+\begin{frame}[fragile]{\texttt{transferApp}}
+  \begin{center}
+    \begin{minipage}{0.8\textwidth}
+      \begin{haskell}
+        transferApp
+          :: CoreExpr
+          -> (Use -> TransferFunction AnalResult)
+          -> (Use -> TransferFunction AnalResult)
+          -> Use -> TransferFunction AnalResult
+        transferApp a transfer_f transfer_a result_use = do
+          (ut_f, f') <- transfer_f (mkCallUse Once result_use)
+          -- peel off one argument from the usage type
+          let (arg_usage, ut_f') = peelArgUsage ut_f
+          (ut_a, a') <- unleashUsage a transfer_a arg_usage
+          return (ut_f' `bothUsageType` ut_a, App f' a')
+      \end{haskell}
+    \end{minipage}
+  \end{center}
 \end{frame}
 
 \end{document}

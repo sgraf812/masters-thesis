@@ -1,280 +1,132 @@
 <meta charset="utf-8" emacsmode="-*- markdown -*-">
 
-# Gliederung
-
-- Einleitung  
-  - GHC, Analysen befeuern Optimierungen
-  - Über 100k Zeilen Code, typische Software Engineering Probleme
-  - Separation of Concerns, DRY
-  - vor dem Hintergrund: Call Arity vs. Demand Analysis
-- Cardinality Analysis  
-  - Beispiel, erklären, single-entry
-  - mögliche Optimierungen
-  - Usage Analyse  
-    - Motivation für one-shot annotationen
-    - mögliche optimierungen
-  - Demand Analysis ist Kardinalitätsanalyse  
-    - Annotationen motivieren (Usage signaturen LetDn, single-entry LetUp)
-    - LetUp vs. LetDn
-- Call Arity  
-  - eta expansion basierend auf usage informationen
-  - motivierende Beispiele, um zu zeigen warum single-entry wichtig ist
-  - Verzahnt arity Analyse mit usage analyse basierend auf co-call graphen für single-entry thunks  
-    - Co-call graphen
-    - Immer LetUp
-- Eigene Arbeit (quasi Kapitel 3 und 4)
-  - Call Arity und Demand Analysis berechnen ihre eigenen Usage Informationen
-  - Eine Usage Analyse, die ihr Gegenstück in beiden Analysen verallgemeinert
-    - ersetzt Call Arity
-    - erlaubt es, die Usage Analyse aus dem Demand Analyser zu schneiden
-  - Denotiert Ausdrücke durch Usage Transformer, monotone Funktionen von Use zu UsageType
-  - ... Wie sehr in die Tiefe, und was?
-  - Eta expansion basierend auf Usage?! Vielleicht die gleichen Beispiele wie am Anfang? Vielleicht schon am Anfang erwähnen?
-- Evaluation  
-  - Eine Variante mit, eine ohne Co-call Graphen
-  - TODO: dfth nochmal ansehen, Beispiel fixen
-  - Allokationen  
-    - infer erwähnen, partial application expandiert
-    - fluid erwähnen, expanding a parsing function
-    - fft2 genauer beschreiben, Code erklären
-  - Auch Anzahl ausgeführter Instruktionen gemessen, aber bei Ausreißern keine Korrellation mit echten Änderungen gefunden (Backup)
-  - Arbeitsaufwand, kloc etc.
-- Related und Future Work?!
-- Conclusion  
-  - Analyse vorgestellt, die Call Arity und die Usage Analyse im Demand Analyser verallgemeinert
-
-
-Backup:
-- Probleme, wie gelöst
-- Feinere Unterteilung von Kardinalitätsanalysen
-- Arity Analyse
-- Product uses
-- sum (filter f [42..2016]) Beispiel, um zu zeigen wo wir uses an call sites brauchen
-- Beispiel, bei dem wir besser sind als Call Arity und Demand Analysis
-- Transferfunktionen
-
-
-
 # Introduction
 
 - Hi ... 
-- über 2 Analysen im GHC erzählen
-- Call Arity, Ergebnis von Joachims Doktorarbeit
-- Demand Analysis, eine Analyse, die sich damit beschäftigt, ob und wie oft eine Variable ausgewertet/aufgerufen wird
+- in meiner MAsterarbeit ging es darum, 2 Analysen im GHC zu vergleichen
+- bevor wir uns ins Schlachtgetümmel werfen, ein paar Sätze dazu, warum
 
 # Motivation
 
-- Unterschied zwischen
-
-```haskell
-add1 x =
-  let expensive = ...
-  in \y -> x + y + expensive
-
-
-add2 x y =
-  let expensive = ...
-  in x + y + expensive
-
-
-main = do
-  print (add 1 2 + add 1 3)
-```
-
-- Keiner, zumindest nicht semantisch (entzuckerte Versionen)
-
-- Operational: Was passiert, wenn beide mit 2 Argumenten wie in `add 1 2` aufgerufen werden?
-- Laziness ist orthogonal, lassen wir außen vor, Annahme: `{-# LANGUAGE Strict #-}`
-- `add2 1 2`  
-  1. Nimmt beide Argumente vom Stack
-  2. Allokiert Platz und berechnet den Wert von `expensive`
-  3. berechnet das Ergebnis über primitive Addition
-- `add1 1 2`
-  1. `add1 1 2` nimmt zunächst das erste Argument vom Stack
-  2. Allokiert Platz und berechnet den Wert von `expensive`
-  3. Allokiert eine Closure für den Rückgabewert, die `expensive` und `x` umfasst
-  4. Ruft die allokierte Closure mit dem zweiten Argument auf, die das Ergebnis berechnet
-- Unnötige Allokationen sind häufig Symptom von Optimierungspotential
-- Erste Variante effizienter, attraktive Optimierung: Eta-expansion, m.a.w.: Lambda binder "nach außen ziehen"
-- Inlining (nun offensichtlich einzige Benutzung) könnte `add2` weiter vereinfachen
-- Darf man das immer?
-
-```haskell
-add1 x =
-  let expensive = ...
-  in \y -> x + y + expensive
-
-
-add2 x y =
-  let expensive = ...
-  in x + y + expensive
-
-
-main = do
-  let shared = add 1
-  print (shared 2 + shared 3)
-```
-
-- Angenommen, `expensive` ist beliebig teuer (in der Praxis möglich)
-- Wie oft wird `expensive` in `main` ausgewertet?  
-  - `add2`: Offensichtlich zweimal, obwohl beide Male mit gleichem Argument
-  - `add1`: Erst der Letgebundene Aufruf mit einem Argument, der `expensive` einmal ausführt und die Closure zurückgibt, dann zwei Aufrufe der Closure, die beide vom geteilten 
-- 1 vs. 2 => `add1` sicherlich effizienter, weil ein Aufruf durch Sharing eingespart wird
-- Das Problem hier: Der über ein let-binding geteilte Aufruf mit nur einem Argument (Call Arity 1, unbedingt klar machen)
-- Idee für eine Arity Analyse: Untersuche die Benutzungen von Funktionen wie `add`, um die minimale Anzahl an Argumenten herauszufinden  
-  - Hier wird `add` auch mit einem Argument aufgerufen, `expensive` ist also potentiell teilbar
-- Faustregel: Thunks werden nie eta-expandiert?!
-
-```haskell
-add1 x =
-  let expensive = ...
-  in \y -> x + y + expensive
-
-
-add2 x y =
-  let expensive = ...
-  in x + y + expensive
-
-
-main = do
-  let shared = add 1
-  print (shared 2)
-```
-
-- Hier wäre Expansion in Ordnung, obwohl `add` mit nur einem Argument aufgerufen wird  
-  - Die eingehende Arity durch den Aufruf von `shared` ist also auch entscheidend
-- Wie wir am vorherigen Beispiel gesehen haben gilt das allerdings nur, wenn wir sicherstellen können, dass `shared` höchstens einmal aufgerufen wird
-- Wir brauchen also für eine präzise Arity Analysis präzise Informationen über Auswertungs-/Aufrufhäufigkeiten
-- Genau das liefert eine Cardinality Analysis
+- GHC altes und mittelgroßes Softwareprojekt, >100k Zeilen Code
+- Vor dem Hintergrund ... angesprochenen zwei Analysen, Call Arity und Demand Analysis, ... in Logik überlappen
+- Allein aus softwaretechnischer Sicht, macht es Sinn die gemeinsame Logik zu extrahieren (DRY)
+- Beide Analysen können von den u.U. präziseren Ergebnissen der extrahierten Analyse profitieren
 
 # Cardinality Analysis
 
-- Erkennt hier das Offensichtliche: `shared` wird genau einmal benutzt  
-  - Geht vom let binding aus
-  - Fragt, wie oft bei der einfachen Auswertung eines Ausdrucks seine freien Variablen ausgewertet werden
-  - Beispiel durchrechnen
+- Bevor wir uns den beiden Analysen zuwenden, beschäftigen wir uns zunächst mit Kardinalitätsanalysen
+- KA berechnet untere und obere Schranken für Auswertungsmultiplizitäten
+- In Anlehnung an Alias Analyse kann man die Analyse in MinCard/MaxCard aufteilen
+- Zur Notation: Intervallschreibweise, interessante Kardinalitäten nur 0,1,mehrmals
+- Beispiel, was eine Kardinalitätsanalyse herausfinden kann:  
+  - a wird mindestens einmal, möglicherweise mehrmals ausgewertet
+  - b wird genau einmal ausgewertet
+  - c möglicherweise gar nicht oder mehrmals
+  - d möglicherweise einmal, aber nicht mehrmals
+  - e ist tot
+- Was kann man nun mit dieser Information anfangen?  
+  - Call-by-value
+  - Call-by-need
+  - Dead code elimination
 
-# Call Arity
+# Call-by-value
 
-- Joachims Ziel war, eine bestimmte Klasse von Bindings über eta-expansion zu optimieren  
-  - Solcher Code entsteht häufig als Ergebnis von List fusion, die Listenbasierten Code in effiziente Tailcalls optimiert
-- Arity Analysen sind schon länger bekannt, die benötigten Cardinality Analysen auch
-- Problem bisheriger Analysen: Keine war präzise genug, um Aufrufhäufigkeiten bei Rekursion richtig zu bestimmen
-- (Daher Verzahnung von Arity Analyse und Kardinalitäts-Analyse, die auf Co-Call Graphen aufbaut)
-- Zusammenspiel wird in GHC als Call Arity bezeichnet
+- vermeidet den Overhead durch lazy evaluation (call-by-need), indem strikte bindings direkt ausgwertet werden
+- erlaubt weitere wichtige Optimierungen wie Unboxing von primitiven Typen um Allokationen komplett zu vermeiden
+- Blind Call-by-value benutzen verändert Terminationsverhalten
+- Daher: 'Welche bindings werden mind. einmal ausgewertet?' (MinCard)  
+  - strictness analyse € MinCard
+- Hier: a und b sind strikt, was durch das Bang Pattern angedeutet wird
 
-```haskell
-sum n =
-  let continuation = 
-        let expensive = ...
-        in \n -> expensive + n - expensive
+# Call-by-name
 
-      stop x = 
-        x > n
+- Call-by-need muss grundsätzlich einmal berechnete Ergebnisse memoisieren
+- Unnötig bei Thunks, die sowieso nur höchstens einmal ausgewertet werden!
+- Verwandelt solche single-entry thunks in Funktionen, um Thunk updates zu sparen
+- Alte Ergebnisse gehen von 70% single-entry aus
+- Dazu: 'Welche Bindings werden höchstens einmal ausgewertet' (MaxCard)
+- Im Beispiel durch zusätzliches unit argument angedeutet: b, d, e
 
-      go x = 
-        if stop x
-        then continuation
-        else \acc -> go (x + 1) (acc + x)
+# Usage Analysis
 
-  in go 0 0
-```
+- Damit sind wir schon bei Usage Analysen, dem eigentlichen Thema meiner Arbeit
+- Usage Analysen berechnen MaxCard Informationen, also obere Grenzen zu Auswertungsmultiplizitäten von Bindings
+- Verwandt: Identifikation von one-shot lambdas, also lambdas, die höchstens einmal aufgerufen werden  
+  - genauer: Anzahl an Auswertungen des Körpers relativ zu einer einzigen Auswertung des Lambda Ausdrucks
+- f wird zweimal aufgerufen, daher äußeres Lambda mit $\omega$ annotiert
+- Jede partielle Funktionsanwendung wird aber nur einmal aufgerufen, daher inneres lambda in beiden Fällen one-shot  
+  - falls nicht verstanden: Partielle Funktionsanwendung wertet einmal zu innerem lambda Ausdruck aus, der dann relative genau einmal aufgerufen wird
+- g dagegen wird nur einmal aufgerufen, daher alle lambdas one-shot
+- Ermöglicht wichtige Optimierungen:  
+  - let floating
+  - eta expansion
+  - inlining
+- Wir interessieren uns heute nur für eta-expansion
 
-- Summe einer Liste in CPS für constant space
-- Würde so aber trotzdem allokieren! 
-- Wichtige Einsicht ist hier, dass `go` eta-expanded werden könnte
-- Damit folgt, dass auch `continuation` eta-expanded werden könnte, aber nur, wenn diese höchstens einmal ausgewertet wird  
-  - Andernfalls laufen wir Gefahr, die Berechnung von `expensive` zu duplizieren!
-- Kardinalitätsanalyse muss feststellen, dass `myId` höchstens einmal ausgewertet wird  
-  - Schwierig hier: Rekursion
-- Zentral ist die Feststellung, dass `myId` nie zusammen mit `go` aufgerufen wird! Nur so sieht man, dass `myId` nur einmal im Basisfall ausgewertet wird
-- Das wird durch Co-call Graphen erfasst  
-  - Graph mit Knoten für alle freien Variablen
-  - Kante zwischen Variable x und Variable y genau dann, wenn bei Auswertung des Ausdrucks beide Variablen aufgerufen werden *können*
-  - Schleife entspricht mehrmaligem Aufruf/Auswertung
-  - 
-- Daher gute Ergebnisse selbst bei Rekursion
-- Wichtige Eigenschaften:  
-  - Nicht higher-order, betrachtet nur lokale let bindings
-  - Verlässt sich auf den Inliner, um interprozedurale Abhängigkeiten zu erkennen
-  - Wichtig bei Let-bindings: Analysiert zuerst den Körper, um Benutzungsstellen zu erkennen, danach die rechte Seite des Bindings
-  - Am Beispiel erklären (vielleicht gleich am vorherigen Beispiel mit erklären?)
-  - Das ist so, weil sonst nicht die minimale Arity klar wäre, mit der `go` analysiert wird, die ist aber essentiell für die Präzision der Co-call Analyse
+# Eta-expansion
+
+- Eta-expansion hebt effektiv lambdas nach außen
+- Ist nicht immer sicher, weil Arbeit von d hier dupliziert werden könnte
+- Weil zu hebendes Lambda aber one-shot ist, dürfen wir das! 
+- Der Körper wird nicht öfter ausgeführt als der umgebende Ausdruck
 
 # Demand Analysis
 
-- Der GHC implementiert bereits eine Kardinalitätsanalyse als Teil des Demand Analyzers
-- Ebenfalls Rückwärtsanalyse
-- Beantwortet die Frage: Wenn dieser Ausdruck ausgewertet wird, wie und wie oft werden seine freien Variablen benutzt?
-  - Beobachtet ähnlich wie Arity Analysis die eingehende Arity, approximiert das Analyseergebnis des Bindings aber nur sehr grob durch einen Demand Transformer
-- Higher-order (interprozedural) über Demand Signatur, die einem Binding zugeordnet wird
-```haskell
-ruffle x _ = x * x
+- Damit haben wir alle Grundlagen zusammen, um die beiden Analysen zu besprechen
+- GHC's Demand Analyser ist eine Kardinalitätsanalyse (berechnet also obere und untere Grenzen für Auswertungsmultiplizitäten)
+- Insbesondere bemüht der Demand Analyser eine Usage Analyse, um single-entry thunks, one-shot lambdas und tote Ausdrücke zu identifizieren
+- Berechnet für jeden Ausdruck, wie er seine freien Variablen benutzt
+- Drei Besonderheiten zu besprechen
 
-main = do
-  let expensive = ...
-  print (ruffle (1 + 1) expensive)
-```
-- Analysiert bei Bindings zuerst die rechte Seite, dann den Körper
-- Hier wird also zunächst `ruffle` analysiert
-- Nimmt an, `ruffle` wird mit manifest arity, hier mit 2 Argumenten, aufgerufen und der Rückgabewert wird benutzt
-- wie `ruffle` bei einem Aufruf seine Argumente benutzt
-- Hier: Wird der Rückgabewert von `ruffle` ausgewertet, dann wird `x` zweimal (mehr als einmal) ausgewertet
-- Das zweite Argument wird nie ausgewertet!
-- Das wird nun in einer Demand Signatur für `ruffle` gespeichert (higher-order Information)
-- Nun wird `main` analysiert
-- Interessant ist der Aufruf `ruffle 1 expensive`
-- `ruffle` wird mit 2 Argumenten aufgerufen und das Ergebnis von `print` verlangt
-- Nun können wir die Demand Signatur anwenden, die die Nachfrage an den Rückgabewert auf Nachfragen der Argumente übersetzt  
-  - `1 + 1` wird also mehrfach verwendet, `expensive` hingegen gar nicht!
-- Die higher-order Informationen über `expensive` wären auch für die Arity Analyse sinnvoll, die bei Funktionsargumenten sehr konservativ ist 
+# Call Uses
 
-```haskell
-sum n =
-  let continuation = 
-        let expensive = ...
-        in \n -> expensive + n - expensive
+- Bis jetzt haben unsere Analysen immmer nur bestimmt, wie oft ein Binding ausgewertet wurde
+- Die Information, *wie* ein Binding ausgewertet wurde ist aber auch wichtig, um one-shot lambdas zu identifizieren
+- Call uses leisten genau das
+- Im Beispiel:  
+- Hier wird f folgender Usage ausgesetzt: höchstens einmal ausgewertet, dann höchstens einmal aufgerufen und das Ergebnis höchstens einmal aufgerufen
+- Im zweiten Beispiel wird f mehrmals ausgewertet, mehrmals aufgerufen, aber das Ergebnis in beiden Fällen höchstens einmal aufgerufen
+- Die one-shot annotationen entsprechen genau diesen Usages
 
-      stop x = 
-        x > n
+# Usage Signatures
 
-      go x = 
-        if stop x
-        then continuation
-        else \acc -> go (x + 1) (acc + x)
+- GHC hat einen sehr aggressiven Inliner, aber manchmal nicht genug (Rekursiv, zu groß)
+- Interprozeduraler Datenfluss über Signaturen, die angeben wie eine Funktion ihre Argumente benutzt
+- Kombination aus Usage für freie Variablen + UsageSig = Usage Type
+- Um UsageSignaturen an den Call Sites verfügbar zu haben, wird der gebundene Ausdruck vor dem let body analysiert, top-down
+- Für Funktionen wird also die LetDn Regel benutzt: Usage types werden an Benutzungsstellen frei gelassen
+- Hier: Const benutzt nur sein erstes ARgument, daher die Usage Signature
+- An der Aufrufstelle wird dann y als einmal benutzt identifiziert und fac 1000 als tot
 
-  in go 0 0
-```
+# Thunks
 
-- In unserem Beispiel von vorher findet die Analyse aber nicht heraus, dass `continuation` nur einmal aufgerufen wird
-- Wenn die Analyse beim binding von `go` ankommt, wird sie für die Fixpunktiteration eine vorläufige, optimistische Demand Signatur für `go` einfügen
-- Nach der ersten Iteration sagt diese, dass `go` auch `continuation` auswertet
-- Die nächste Iteration muss den Demand unter dem Lambda-binder expandieren, der so auch `continuation` aufrufen könnte
-- Da das in einer Closure passiert, die wir zurückgeben, muss die Analyse konservativ davon ausgehen, dass diese mehrmals aufgerufen werden kann
+- Bei Thunks funktioniert LetDn nicht so gut, weil die Auswertung der rechten Seite zwischen Aufrufen geteilt wird
+- hier hat `y` zwei Benutzungsstellen, mit LetDn daher zwei Benutzungen von `x`
+- Die Auswertung der rechten Seite von `y` wird aber geteilt! Nur eine Benutzung von `x`
+- Daher bei Thunks LetUp: Erst let body analysieren, Usage merken und dann rechte Seite in dem festgehaltenen Use, hier $U$, analysieren
+- Das wäre schon alles wichtige zum Demand Analyser (vielleicht Fragen?)
 
-# GHC: Core-to-Core Optimization Pipeline
+# Call Arity
 
-- Im GHC wird Call Arity einmal aufgerufen, Demand Analysis zweimal
-- Insbesondere ist die Reihenfolge Call Arity -> Simplifier für eta-expansion -> Demand Analysis -> Worker/Wrapper Transformation
-- Der Simplifier zerstört die im Syntaxbaum hinterlegten Analyseresultate der Demand Analysis
-- Findet die Worker/wrapper Transformation vor Eta-Expansion statt, können die zu expandierenden Argumente nicht von Worker/Wrapper profitieren
+1. Grundsätzliche Idee: Eta-Expansion basierend darauf, wie Bindings benutzt werden  
+  - Hier: `f` wird immer mit zwei Argumenten aufgerufen, Sharing ist so nie sichtbar
+2. `f` kann zu Arity 2 expandiert werden
+3. Wie sieht das in dieser Situation aus?
+  - `f` wird zwar immer noch mit 2 Argumenten aufgerufen
+4. Aber `f` ist auch ein Thunk, daher wird zwischen den Aufrufen die Arbeit des `if` Ausdrucks geteilt  
+  - Insbesondere die Auswertung von `expensive`, die beliebig teuer sein kann
+  - Eta-Expansion würde Sharing zunichte machen und den teuren Ausdruck mehrmals auswerten
+5. Hier ist `f` wieder ein Thunk, mit zwei Argumenten aufgerufen  
+6. Und weil `f` nur einmal aufgerufen wird, wird kein Sharing sichtbar  
+  - Eta-Expansion ist sicher
+  - Insbesondere zeigt das Beispiel auch, dass selbst in Situationen in denen statisch klar ist, dass `f` nur einmal aufgerufen wird, Inlining trotzdem nicht immer möglich ist
+  - Called Once information also wichtig (für unsere Zwecke wie single-entry)
 
-# Call Arity vs. Demand Analysis
+# Call Arity (Co-call graphs)
 
-|  | Call Arity | Demand Analysis |
-|--|------------|-----------------|
-| Schwächen | Nicht higher-order (Arity/Co-call Signaturen denkbar) | Präzisionsverlust durch Ignorieren der eingehenden Arity bei Funktionen |
-| Let-Bindings | Körper zuerst für Arity, dann Bindings | Bindings zuerst für Signaturen, dann Körper |
-| Pipelinekonflikte | Nachgelagerter Simplifier run zerstört Demand Analyseresultate | Nicht eta-expandierte Binder profitieren nicht von Worker/Wrapper |
+1. 
 
-# Ziel der Arbeit
 
-- Call Arity in Demand Analyse integrieren
-- Higher-Order Co-Call Analyse über analoge Co-Call Signaturen für Funktionen
-- Dazu nötig: Vereinheitlichung der Analysereihenfolge für Let-Bindings  
-  - 'echte' Fixpunktiteration, entkoppelt vom Syntaxbaum
-- Pipelinekonflikte lösen über einen zusätzlichen Aufruf der kombinierten Demand Analyse  
-  - verschlechtert Compiler Performance, für Rückführung in GHC inakzeptabel
-  - aber angemessenes Ziel im Rahmen der Masterarbeit
 
 <!-- Markdeep: --><style class="fallback">body{visibility:hidden;white-space:pre;font-family:monospace}</style><script src="markdeep.min.js"></script><script src="https://casual-effects.com/markdeep/latest/markdeep.min.js"></script><script>window.alreadyProcessedMarkdeep||(document.body.style.visibility="visible")</script>
