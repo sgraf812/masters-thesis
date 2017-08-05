@@ -125,7 +125,145 @@
 
 # Call Arity (Co-call graphs)
 
-1. 
+1. Called once information wird durch eine Usage Analyse berechnet  
+  - Damit rechte Seite in abhängigkeit von Anzahl Argumenten analysiert werden kann, muss body vor RHS analysiert werden
+  - Wie LetUp bottom-up
+  - LetUp aber zu unpräzise, wie dieser Fall zeigt
+  - Hier wird vergessen, dass x und y nie zusammen aufgerufen werden
+  - dann wird die rechte Seite von y freigelassen: x wird mehrfach benutzt
+2. Deswegen hat sich Joachim Co-call Graphen ausgedacht
+  - Merken sich Kontrollflussinformationen
+  - Kanten verbinden variablen, die möglicherweise zusammen ausgewertet werden
+  - Andersherum: Nichtvorhandensein einer Kante schließt gemeinsame Auswertung aus
+  - Schleifen modellieren called-once information
+  - Hier: Für den if Ausdruck haben wir Co-Call Graph gegeben
+  - x und y zusammen mit b ausgewertet, aber keine Kante zwischen beiden
+  - An let bindings findet subsitutionsschritt statt
+3. Usage type von y (besteht hier nur aus einem einzelnen Knoten x) wird hier in die Vorkommnisse von y im Typen vom Body eingesetzt und alle Knoten im Graphen mit allen Nachbarn von y verbunden
+4. Da x nicht mit y verbunden war, folgt daraus keine Schleife an x
+
+# Combined Usage Analysis
+
+- Idee für kombinierte Usage Analyse:  
+  - Nimm Usage Analyse vom Demand Analyser
+  - Füge Co-Call graphen hinzu, um single-entry thunks zu verfolgen
+  - Im Fall von Funktionen (also LetDn) werden präzisere call uses an die rechten Seiten weitergegeben
+- Was das heißt, sehen wir am besten an einem Beispiel
+
+# Call Arity vs. Demand Analysis
+
+1. Schauen wir uns mal das untere Beispiel an  
+- Wichtig ist hier, wie oft `z` ausgewertet wird, tatsächlich nur einmal
+- Demand Analysis analysiert das let binding aber mit der LetDn Regel, also top-down, weil `f` kein Thunk ist
+- Um einen Usage type für `f` parat zu haben, nimmt Demand Analysis einen aufruf mit manifest arity an, das ist die Anzahl führender Lambdas, hier 1
+- Das reicht aber nicht, um 'unter das innere Lambda' zu gucken
+- Muss daher konservativ annehmen, dass `z` mehrfach ausgewertet wird
+- Tatsächlich wird `f` aber mit zwei Argumenten aufgerufen, dieser Use hier
+- Hätte man die rechte Seite vorher in dem Use analysiert, würde man dsa gewünschte Ergebnis erzielen
+2. Call Arity erbringt hier das gewünschte, weil die nötige Arity information von unten nach oben fließt (LetUp, hat dafür keine Usage Signaturen)
+- Meine Lösung: Rechte Seite erst analysieren wenn gefordert, dann ist der präzise Use bekannt
+- Erste Ideen basierten darauf, irgendwie laziness auszunutzen
+- Das habe ich aber schnell wieder verworfen
+3. Denn sobald Rekursion ins Spiel kommt, bekommt man Terminationsprobleme  
+  - Hier: `fac` ruft sich rekursiv auf. Um `fac`s usage type zu bestimmen, müsste man `fac`s usage type kennen
+  - Wird sehr schnell sehr kompliziert, sogar noch ohne wechselseitige Rekursion
+  - So habe ich Fixpunktitertaion wiedergefunden, deren Iterationsreihenfolge aber nicht wie üblich an den Syntaxbaum gekoppelt ist, sondern gerne auch mal hin- und herspringt
+  - Das hat dann zu einer Graphabstraktion geführt, bei der Transferfunktionen syntaktischer Elemente Knoten zugeordnet werden
+  - Lösung wird durch einen Worklistalgorithmus bestimmt
+  - Wie wir gesehen haben, ist der Usage Type eines Ausdrucks immer auch abhängig von dem Use (Anzahl Argumente des Aufrufs) unter dem die Expression steht
+
+# Transferfunktion
+
+- Effektiv denotieren wir Ausdrücke durch monotone usage transformer
+- Ein Usage Transformer bildet den eigehenden use auf den zugehörigen usage type (also wie freie Variablen und Argumente benutzt werden) ab
+- Wie wir eben gesehen haben, ist Anzahl eingehender Argumente wichtige Information
+- Nur um einmal gezeigt zu haben, wie das dann formal aussieht, hier die Transferfunktion für nicht-rekursive let bindigns
+- TRansferfunktion ordnet jedem Ausdruck mithilfe einer Umgebung von usgae transformern für Aufrufe von freien Variablen einen usage transformer zu
+- Ohne tiefer ins detail zu gehen, hier wird der usage transformer der rechten Seite der Transformer Umgebung als LetDn-Variante zugefügt
+- Hier wird dann die rechte Seite analysiert basierend auf dem use den der body ausübt (LetUp)
+
+# Recovering Call Arity
+
+1. Meine Analyse verallgemeinert die Usage Analyse im Demand Analyser und ersetzt Call Arity
+- Daher muss man die Call Arity Information auch aus den USage resultaten gewinnen können
+- Wichtige Beobachtung: Eta-Expansion ändert nichts daran, wie Ausdrücke benutzt werden
+- Hier sieht man den Algorithmus den ich benutze, um bindings basierend auf usag einformationen zu eta-expanden
+- LEichter an ein paar Beispielen zu verstehen
+2. `f` ist hier eine Funktion unter multi-call usage  
+  - `f` ist kein Thunk, also ist die Auswertungsmultiplizität uninteressant
+  - ab da kann man entsprechend der manifest arity (also der anzahl führender lambdas) viele Cs überspringen, hier 1
+  - wir dürfen nun so lange expandieren, wie wir single-call uses appellen können, hier 1
+3. also eta-expansion zu arity 2
+4. Ähnliches Beispiel, diesmal ein Thunk in multi-call usage  
+  - Hier scheitert es schon an der Auswertungsmultiplizität $\omega$ (die für unsere Fälle tatsächlich immer kleiner oder gleich des äußeren call use ist)
+  - Eta-expansion würde Arbeit duplizieren!
+5. Ein Thunk in single-call usage dagegen...  
+  - Hier ist die Auswertungsmultiplizität 1, wir dürfen weiter machen
+  - Arity ist 0, wir dürfen also keine führenden Call uses entfernen
+6. Äußeres lambda one-shot! wir dürfen expandieren
+7. Inneres lambda auch one-shot! nochmal expandieren
+8. Vollständig eta-expandiert zu arity 2, wie Call Arity
+
+# Implementation
+
+- Gerade der Demand Analyser ist ein ziemlich zentraler Bestandteil vom GHC, Bugs haben sich an den unmöglichsten Stellen bemerkbar gemacht
+- Ansonsten führte eins zum anderen
+- Co-Call graphs müssen jetzt mit wesentlich mehr variablen umgehen, daher neue Repräsentation die effizient volle und dünne Graphen darstellt
+- Graphbasierte Fixpunktiteration hat mich einiges an Nerven gekostet
+- Terminationsprobleme, weil monotonie der approximierten usage transformer wichtig war und keine geeignete datenstruktur existiert
+
+# Evaluation
+
+- Ich stelle hier zwei der gebenchmarkten Varianten vor, relativ zur baseline GHC 8.2.1
+- Variante 1: Volle Analyse, mit co-call graphen und den Veränderungen an LetDn
+- Variante 2: Keine co-call graphen, trotzdem LetDn
+- Gemessen habe ich Allokationen und die Anzahl ausgeführter Instruktionen, mit cachegrind gemessen
+- Artefakt Performance anhand der nofib Benchmark suite, Standard im GHC
+- Compiler Perofmrnace während die Benchmark suite kompiliert wurde, sowie während der stage 2 compiler mit meinem optimierten stage 1 Compiler kompiliert wurde
+- GHC bootstrapping: bootstrpa compiler kompiliert stage 1 Compiler, der stage 1 Compiler kompiliert alle nötigen libraries und den stage 2 Compiler, der dann verwendet wird
+
+# Allocations
+
+- Erfreulicherweise keine Regressionen, Ziel erreicht
+- aber auch keine großen Verbesserungen
+- Co-Call Graphen haben interessanterweise keinen großen Einfluss, wenn die verbesserte LetDn REgel aktiv ist
+- Tatsächlich wird auch das List fusion Beispiel, dass Call Arity motiviert, ohne co-call graphen optimiert
+
+# Executed Instructions
+
+- Schaut man auf die Anzahl ausgeführter Instruktionen sind die Unterschiede größer
+- Viele Ausreißer (keine Fluktuationen), obwohl ich keine Unterschiede im generierten Code feststellen konnte
+- Insgesamt gereicht es aber zu unserem Vorteil (-0.6%)
+- Co-Call graphen scheinen in isolierten Fällen einen kleinen Unterschied zu machen
+
+# Compiler Performance
+
+- Wie die ZAhlen zeigen, hat sich die Performance des Compilers durchgehend verschlechtert
+- Ist auch nicht verwunderlich, denn wir ersetzen einen Lauf von Call Arity durch 3 Läufe einer Analyse, die Call Arity verallgemeinert
+- Außerdem sei noch gesagt, dass der Speicherverbrauch von der Variante mit co-call graphen für eine Eingabedatei so in die Höhe geschossen ist, dass die 32GB der Referenzmaschine nicht zum kompilieren ausreichten
+- daher wurde der stage 2 Compiler ohne optimierungen kompiliert, was sich auch in den Werten widerspiegelt
+- Auch wenn es die Zahlen nicht hergeben, gefühlt ist die Performance von Variante (2) deutlich besser und vor allem konsistenter
+
+# Related Work
+
+- Ansätze kann aufteilen in welche die über Abstrakte Interpretation funktionieren und solche, die das problem über typsysteme angehen
+- Beide hier beschriebenen Analysen funktionieren über abstrakte Interpretation
+- In den 80ern und 90ern hat viel Forschung zu Strictness Analyse stattgefunden (MinCard)
+- Das hat letztendlic auf den Ansatz von projection transformers geführt, die später demand transformer und damit meine usage transformer inspiriert haben
+- Seit den 90ern bis heute wird an Typsystemen zur Usage Analyse geforscht
+- Theoretisch größere Präzision, gerade im interprozeduralen Fall
+- Aber praktisch erweist sich die typische Kombination von Polymorphismus und Subtyping (subeffecting) verbunden mit der Explosion von zu unifizierenden Variablen, die durch Annotation von Datentypen hervorgerufen wird als zu langsam heraus
+
+# Conclusion
+
+- Ich habe eine Usage Analyse geschrieben, die ihr Gegenstück im Demand Analyser und Call Arity verallgemeinert  
+  - Als 'Beweis' für die Korrektheit führe ich die fehlenden Regressionen in der Benchmarksuite an
+  - hat sich aber auch nicht viel verbessert
+- Ich müsste teilweise ziemlich tief im GHC wühlen, bis ich alle nötigen Stellen gefunden habe, die ich ändern musste
+- Für die Zukunft erweisen sich die Graph-basierte Fixpunktiteration als interessantes Forschungsthema
+- Auch fehlt eine geeignete Datenstruktur für (montone) Maps mit join-semilattices als schlüssel
+- Auf lange Sicht wäre eine Integration in GHC denkbar, im Moment allerdings zu viel Neues
+- GHC könnte aber von den Ideen aus meiner Arbeit profitieren
 
 
 
