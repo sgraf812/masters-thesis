@@ -105,50 +105,6 @@
   \end{center}
 \end{frame}
 
-\begin{frame}[fragile]{Call-by-value}
-  \begin{itemize}
-    \item 
-      Avoids operational complexity of laziness, enables unboxing
-      \begin{itemize} \item Exploits \emph{strictness} \end{itemize}
-      \begin{itemize} \item `Evaluated at \emph{least} once' (\MinCard) \end{itemize}
-  \end{itemize}
-  \begin{center}
-    \begin{minipage}{0.5\textwidth}
-      \begin{haskell}
-        main = do
-          let !a    = ...                 -- $[\mathbf{1},\omega]$
-              !b    = ...                 -- $[\mathbf{1},1]$
-               c    = ...                 -- $[0,\omega]$
-               d    = ...                 -- $[0,1]$
-               e    = ...                 -- $[0,0]$
-          print (a + if b then a * d else c * c)
-      \end{haskell}
-    \end{minipage}
-  \end{center}
-\end{frame}
-
-\begin{frame}[fragile]{Call-by-name}
-  \begin{itemize}
-    \item 
-      Omits updates of \emph{single-entry} thunks, mimicing regular function calls
-      \begin{itemize} \item Exploits lack of \emph{sharing} \end{itemize}
-      \begin{itemize} \item `Evaluated at \emph{most} once' (\MaxCard) \end{itemize}
-  \end{itemize}
-  \begin{center}
-    \begin{minipage}{0.5\textwidth}
-      \begin{haskell}
-        main = do
-          let  a    = ...                 -- $[1,\omega]$
-               b () = ...                 -- $[1,\mathbf{1}]$
-               c    = ...                 -- $[0,\omega]$
-               d () = ...                 -- $[0,\mathbf{1}]$
-               e () = ...                 -- $[0,\mathbf{0}]$
-          print (a + if b () then a * d () else c * c)
-      \end{haskell}
-    \end{minipage}
-  \end{center}
-\end{frame}
-
 \begin{frame}[fragile]{Usage Analysis}
   \begin{itemize}
     \item \MaxCard analysis, \eg computes $m$ in binding annotations $[n,m]$
@@ -170,35 +126,6 @@
                     in \|$\mathtt{w}^1$| -> c*d + z*w
           print (f 1 2 + f 4 5 * g 3 42)
       \end{haskell*}
-    \end{minipage}
-  \end{center}
-\end{frame}
-
-\begin{frame}[fragile]{$\eta$-Expansion}
-  \begin{itemize}
-    \item Floats lambdas out, possibly duplicating work
-    \item Not so with one-shot lambdas
-  \end{itemize}
-  \begin{center}
-    \begin{minipage}{0.5\textwidth}
-      \begin{overprint}
-        \onslide<1>
-        \begin{haskell*}{escapeinside=||}
-          main = do        
-            let g = \|$\mathtt{z}^1$| -> 
-                      let d = ... 
-                      in \|$\mathtt{w}^{\color{red} 1}$| -> d + z*w
-            print (g 3 42)
-        \end{haskell*}
-        \onslide<2>
-        \begin{haskell*}{escapeinside=||}
-          main = do        
-            let g = \|$\mathtt{z}^1$| |\color{red}$\mathtt{w}^1$| -> 
-                      let d = ... 
-                      in d + z*w
-            print (g 3 42)
-        \end{haskell*}
-      \end{overprint}
     \end{minipage}
   \end{center}
 \end{frame}
@@ -697,96 +624,69 @@
   \end{itemize}
 \end{frame}
 
-\begin{frame}[fragile]{Evaluation}
-  \begin{overprint}
-    \onslide<1>
-    \begin{itemize}
-      \item Benchmarked two variants, baseline GHC 8.2.1
-        \begin{itemize}
-          \item Full analysis, with co-call graphs \varfull
-          \item Without co-call graphs, but with glorified \textsc{LetDn} \varedges
-        \end{itemize}
-      \item Measured allocations and executed instructions
-        \begin{itemize}
-          \item Artifact performance on nofib suite
-          \item Compiler performance compiling nofib and stage 2 compiler
-        \end{itemize}
-    \end{itemize}
+\begin{frame}{Evaluation}
+  \begin{itemize}
+    \item Benchmarked two variants, baseline GHC 8.2.1
+      \begin{itemize}
+        \item Full analysis, with co-call graphs \varfull
+        \item Without co-call graphs, but with glorified \textsc{LetDn} \varedges
+      \end{itemize}
+    \item Measured allocations and executed instructions
+      \begin{itemize}
+        \item Artifact performance on nofib suite
+        \item Compiler performance compiling nofib and stage 2 compiler
+      \end{itemize}
+  \end{itemize}
+\end{frame}
 
-    \onslide<2>
-    \begin{columns}
-      \begin{column}{0.4\textwidth}
-        \begin{itemize}
-          \item No regressions relative to the baseline (technically)
-          \item Co-call graphs didn't influence allocations noticeably
-        \end{itemize}
-      \end{column}
-      \begin{column}{0.6\textwidth}
-        \begin{table}
-          \centering
-          \begin{tabular}{lrr}
-            \toprule
-                    & \multicolumn{2}{c}{Bytes allocated} \\
-                      \cmidrule(lr){2-3}
-            Program & \multicolumn{1}{c}{\varfull} & \multicolumn{1}{c}{\varedges} \\
-            \midrule
-            \input{benchmarks/usage-anal-nofib-table-alloc.tex}
-            \bottomrule
-          \end{tabular}
-        \end{table}
-      \end{column}
-    \end{columns}
+\begin{frame}{Evaluation}
+  \framesubtitle{Artifact Performance}
+  \begin{columns}
+    \begin{column}{0.4\textwidth}
+      \begin{itemize}
+        \item No regressions relative to the baseline (technically)
+        \item Co-call graphs didn't influence allocations noticeably
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.6\textwidth}
+      \begin{table}
+        \centering
+        \begin{tabular}{lrr}
+          \toprule
+                  & \multicolumn{2}{c}{Bytes allocated} \\
+                    \cmidrule(lr){2-3}
+          Program & \multicolumn{1}{c}{\varfull} & \multicolumn{1}{c}{\varedges} \\
+          \midrule
+          \input{benchmarks/usage-anal-nofib-table-alloc.tex}
+          \bottomrule
+        \end{tabular}
+      \end{table}
+    \end{column}
+  \end{columns}
+\end{frame}
 
-    \onslide<3>
-    \begin{columns}
-      \begin{column}{0.4\textwidth}
-        \begin{itemize}
-          \item Wild outliers, unclear why
-          \item Plays out in our favour
-          \item Co-call graphs make a slight difference
-        \end{itemize}
-      \end{column}
-      \begin{column}{0.6\textwidth}
-        \begin{table}
-          \centering
-          \begin{tabular}{lrr}
-            \toprule
-                    & \multicolumn{2}{c}{Instructions executed} \\
-                      \cmidrule(lr){2-3}
-            Program & \multicolumn{1}{c}{\varfull} & \multicolumn{1}{c}{\varedges} \\
-            \midrule
-            \input{benchmarks/usage-anal-nofib-table-instrs.tex}
-            \bottomrule
-          \end{tabular}
-        \end{table}
-      \end{column}
-    \end{columns}
-
-    \onslide<4>
-    \begin{itemize}
-      \item Compiler performance got worse
-        \begin{itemize}
-          \item One run of Call Arity replaced by three runs of our usage analysis
-        \end{itemize}
-      \item GHC stage 2 compiler built without optimisations
-        \begin{itemize}
-          \item Space usage of variant \varfull goes through the roof for some inputs
-        \end{itemize}
-    \end{itemize}
-    \begin{table}
-      \centering
-      \begin{tabular}{lrrrr}
-        \toprule
-                & \multicolumn{2}{c}{Bytes allocated} & \multicolumn{2}{c}{Instructions executed} \\
-                  \cmidrule(lr){2-3} \cmidrule(lr){4-5}
-        Program & \multicolumn{1}{c}{\varfull} & \multicolumn{1}{c}{\varedges} & \multicolumn{1}{c}{\varfull} & \multicolumn{1}{c}{\varedges} \\
-        \midrule
-        \input{benchmarks/usage-anal-nofib-comp-table.tex}
-        \input{benchmarks/usage-anal-ghc-comp-table.tex}
-        \bottomrule
-      \end{tabular}
-    \end{table}
-  \end{overprint}
+\begin{frame}{Evaluation}
+  \framesubtitle{Compiler Performance}
+  \begin{itemize}
+    \item Compiler performance got worse
+      \begin{itemize}
+        \item One run of Call Arity replaced by three runs of our usage analysis
+      \end{itemize}
+    \item Space usage of variant \varfull goes through the roof for some inputs
+  \end{itemize}
+  \begin{table}
+    \centering
+    \begin{tabular}{lrrrr}
+      \toprule
+              & \multicolumn{2}{c}{Bytes allocated} & \multicolumn{2}{c}{Instructions executed} \\
+                \cmidrule(lr){2-3} \cmidrule(lr){4-5}
+      Program & \multicolumn{1}{c}{\varfull} & \multicolumn{1}{c}{\varedges} & \multicolumn{1}{c}{\varfull} & \multicolumn{1}{c}{\varedges} \\
+      \midrule
+      \input{benchmarks/usage-anal-nofib-comp-table.tex}
+      \input{benchmarks/usage-anal-ghc-comp-table.tex}
+      \bottomrule
+    \end{tabular}
+  \end{table}
 \end{frame}
 
 \begin{frame}{Related Work}
@@ -837,6 +737,50 @@
 }
 \section{Backup}
 \frame{\sectionpage}
+
+\begin{frame}[fragile]{Call-by-value}
+  \begin{itemize}
+    \item 
+      Avoids operational complexity of laziness, enables unboxing
+      \begin{itemize} \item Exploits \emph{strictness} \end{itemize}
+      \begin{itemize} \item `Evaluated at \emph{least} once' (\MinCard) \end{itemize}
+  \end{itemize}
+  \begin{center}
+    \begin{minipage}{0.5\textwidth}
+      \begin{haskell}
+        main = do
+          let !a    = ...                 -- $[\mathbf{1},\omega]$
+              !b    = ...                 -- $[\mathbf{1},1]$
+               c    = ...                 -- $[0,\omega]$
+               d    = ...                 -- $[0,1]$
+               e    = ...                 -- $[0,0]$
+          print (a + if b then a * d else c * c)
+      \end{haskell}
+    \end{minipage}
+  \end{center}
+\end{frame}
+
+\begin{frame}[fragile]{Call-by-name}
+  \begin{itemize}
+    \item 
+      Omits updates of \emph{single-entry} thunks, mimicing regular function calls
+      \begin{itemize} \item Exploits lack of \emph{sharing} \end{itemize}
+      \begin{itemize} \item `Evaluated at \emph{most} once' (\MaxCard) \end{itemize}
+  \end{itemize}
+  \begin{center}
+    \begin{minipage}{0.5\textwidth}
+      \begin{haskell}
+        main = do
+          let  a    = ...                 -- $[1,\omega]$
+               b () = ...                 -- $[1,\mathbf{1}]$
+               c    = ...                 -- $[0,\omega]$
+               d () = ...                 -- $[0,\mathbf{1}]$
+               e () = ...                 -- $[0,\mathbf{0}]$
+          print (a + if b () then a * d () else c * c)
+      \end{haskell}
+    \end{minipage}
+  \end{center}
+\end{frame}
 
 \begin{frame}[fragile]{Dead code}
   \begin{itemize}
@@ -908,6 +852,35 @@
                       let |\color{red}\texttt{d}| = ... 
                       in c*|\color{red}\texttt{d}| + z*w
             print (f 1 2 + f 4 5 * g 3 42)
+        \end{haskell*}
+      \end{overprint}
+    \end{minipage}
+  \end{center}
+\end{frame}
+
+\begin{frame}[fragile]{$\eta$-Expansion}
+  \begin{itemize}
+    \item Floats lambdas out, possibly duplicating work
+    \item Not so with one-shot lambdas
+  \end{itemize}
+  \begin{center}
+    \begin{minipage}{0.5\textwidth}
+      \begin{overprint}
+        \onslide<1>
+        \begin{haskell*}{escapeinside=||}
+          main = do        
+            let g = \|$\mathtt{z}^1$| -> 
+                      let d = ... 
+                      in \|$\mathtt{w}^{\color{red} 1}$| -> d + z*w
+            print (g 3 42)
+        \end{haskell*}
+        \onslide<2>
+        \begin{haskell*}{escapeinside=||}
+          main = do        
+            let g = \|$\mathtt{z}^1$| |\color{red}$\mathtt{w}^1$| -> 
+                      let d = ... 
+                      in d + z*w
+            print (g 3 42)
         \end{haskell*}
       \end{overprint}
     \end{minipage}
@@ -1034,6 +1007,32 @@
       \end{haskell}
     \end{minipage}
   \end{center}
+\end{frame}
+
+\begin{frame}{Evaluation - Nofib Instr}
+  \begin{columns}
+    \begin{column}{0.4\textwidth}
+      \begin{itemize}
+        \item Wild outliers, unclear why
+        \item Plays out in our favour
+        \item Co-call graphs make a slight difference
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.6\textwidth}
+      \begin{table}
+        \centering
+        \begin{tabular}{lrr}
+          \toprule
+                  & \multicolumn{2}{c}{Instructions executed} \\
+                    \cmidrule(lr){2-3}
+          Program & \multicolumn{1}{c}{\varfull} & \multicolumn{1}{c}{\varedges} \\
+          \midrule
+          \input{benchmarks/usage-anal-nofib-table-instrs.tex}
+          \bottomrule
+        \end{tabular}
+      \end{table}
+    \end{column}
+  \end{columns}
 \end{frame}
 
 \end{document}

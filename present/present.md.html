@@ -2,22 +2,27 @@
 
 # Introduction
 
-- Hi ... 
-- in meiner MAsterarbeit ging es darum, 2 Analysen im GHC zu vergleichen
-- bevor wir uns ins Schlachtgetümmel werfen, ein paar Sätze dazu, warum
+- Danke für die Vorstellung, ich bin ... 
+- in meiner MAsterarbeit ging es darum, Gemeinsamkeiten in 2 Analysen im GHC herauszuarbeiten
+- ... warum
 
 # Motivation
 
-- GHC altes und mittelgroßes Softwareprojekt, >100k Zeilen Code
+- 1 Minute
+- GHC altes und mittelgroßes Softwareprojekt, >100k Zeilen Code, nicht immer einfach
+- Bringt die typischen softwaretechnischen Herausforderungen mit sich
 - Vor dem Hintergrund ... angesprochenen zwei Analysen, Call Arity und Demand Analysis, ... in Logik überlappen
-- Allein aus softwaretechnischer Sicht, macht es Sinn die gemeinsame Logik zu extrahieren (DRY)
-- Beide Analysen können von den u.U. präziseren Ergebnissen der extrahierten Analyse profitieren
+- Allein dem Prinzip DRY folgend macht es Sinn die gemeinsame Logik zu extrahieren
+- u.U. können beide Analysen von den präziseren Ergebnissen der kombinierten Analyse profitieren
 
 # Cardinality Analysis
 
+- 2 Minuten
 - Bevor wir uns den beiden Analysen zuwenden, beschäftigen wir uns zunächst mit Kardinalitätsanalysen
-- KA berechnet untere und obere Schranken für Auswertungsmultiplizitäten
-- In Anlehnung an Alias Analyse kann man die Analyse in MinCard/MaxCard aufteilen
+- KA berechnet untere und obere Schranken dafür, wie oft etwas ausgewertet wird
+- In Anlehnung an Alias Analyse  
+  - May und MustAlias unterscheiden
+  - in MinCard (untere SChranken) und MaxCard (nur obere Schranken) aufteilen
 - Zur Notation: Intervallschreibweise, interessante Kardinalitäten nur 0,1,mehrmals
 - Beispiel, was eine Kardinalitätsanalyse herausfinden kann:  
   - a wird mindestens einmal, möglicherweise mehrmals ausgewertet
@@ -25,33 +30,13 @@
   - c möglicherweise gar nicht oder mehrmals
   - d möglicherweise einmal, aber nicht mehrmals
   - e ist tot
-- Was kann man nun mit dieser Information anfangen?  
-  - Call-by-value
-  - Call-by-need
-  - Dead code elimination
-
-# Call-by-value
-
-- vermeidet den Overhead durch lazy evaluation (call-by-need), indem strikte bindings direkt ausgwertet werden
-- erlaubt weitere wichtige Optimierungen wie Unboxing von primitiven Typen um Allokationen komplett zu vermeiden
-- Blind Call-by-value benutzen verändert Terminationsverhalten
-- Daher: 'Welche bindings werden mind. einmal ausgewertet?' (MinCard)  
-  - strictness analyse € MinCard
-- Hier: a und b sind strikt, was durch das Bang Pattern angedeutet wird
-
-# Call-by-name
-
-- Call-by-need muss grundsätzlich einmal berechnete Ergebnisse memoisieren
-- Unnötig bei Thunks, die sowieso nur höchstens einmal ausgewertet werden!
-- Verwandelt solche single-entry thunks in Funktionen, um Thunk updates zu sparen
-- Alte Ergebnisse gehen von 70% single-entry aus
-- Dazu: 'Welche Bindings werden höchstens einmal ausgewertet' (MaxCard)
-- Im Beispiel durch zusätzliches unit argument angedeutet: b, d, e
+- Aus Zeitgründen muss ich leider sämtliche Optimierungen überspringen
 
 # Usage Analysis
 
+- 1 Minute
 - Damit sind wir schon bei Usage Analysen, dem eigentlichen Thema meiner Arbeit
-- Usage Analysen berechnen MaxCard Informationen, also obere Grenzen zu Auswertungsmultiplizitäten von Bindings
+- Usage Analysen berechnen MaxCard Informationen, also obere Grenzen zu Auswertungskardinalitäten von Bindings
 - Verwandt: Identifikation von one-shot lambdas, also lambdas, die höchstens einmal aufgerufen werden  
   - genauer: Anzahl an Auswertungen des Körpers relativ zu einer einzigen Auswertung des Lambda Ausdrucks
 - f wird zweimal aufgerufen, daher äußeres Lambda mit $\omega$ annotiert
@@ -62,44 +47,43 @@
   - let floating
   - eta expansion
   - inlining
-- Wir interessieren uns heute nur für eta-expansion
-
-# Eta-expansion
-
-- Eta-expansion hebt effektiv lambdas nach außen
-- Ist nicht immer sicher, weil Arbeit von d hier dupliziert werden könnte
-- Weil zu hebendes Lambda aber one-shot ist, dürfen wir das! 
-- Der Körper wird nicht öfter ausgeführt als der umgebende Ausdruck
 
 # Demand Analysis
 
+- 1 Minute
 - Damit haben wir alle Grundlagen zusammen, um die beiden Analysen zu besprechen
-- GHC's Demand Analyser ist eine Kardinalitätsanalyse (berechnet also obere und untere Grenzen für Auswertungsmultiplizitäten)
+- GHC's Demand Analyser ist eine Kardinalitätsanalyse (berechnet also obere und untere Grenzen für Auswertungskardinalitäten)
 - Insbesondere bemüht der Demand Analyser eine Usage Analyse, um single-entry thunks, one-shot lambdas und tote Ausdrücke zu identifizieren
 - Berechnet für jeden Ausdruck, wie er seine freien Variablen benutzt
+- Rückwärtsanalyse
 - Drei Besonderheiten zu besprechen
 
 # Call Uses
+
+> 1 Minute
 
 - Bis jetzt haben unsere Analysen immmer nur bestimmt, wie oft ein Binding ausgewertet wurde
 - Die Information, *wie* ein Binding ausgewertet wurde ist aber auch wichtig, um one-shot lambdas zu identifizieren
 - Call uses leisten genau das
 - Im Beispiel:  
 - Hier wird f folgender Usage ausgesetzt: höchstens einmal ausgewertet, dann höchstens einmal aufgerufen und das Ergebnis höchstens einmal aufgerufen
-- Im zweiten Beispiel wird f mehrmals ausgewertet, mehrmals aufgerufen, aber das Ergebnis in beiden Fällen höchstens einmal aufgerufen
-- Die one-shot annotationen entsprechen genau diesen Usages
+- Im zweiten Beispiel wird f mehrmals ausgewertet, mehrmals aufgerufen, aber die partiellen Applikationen in allen Fällen höchstens einmal aufgerufen
+- Die one-shot annotationen lassen sich dann genau an den Call Uses ablesen
 
 # Usage Signatures
 
-- GHC hat einen sehr aggressiven Inliner, aber manchmal nicht genug (Rekursiv, zu groß)
-- Interprozeduraler Datenfluss über Signaturen, die angeben wie eine Funktion ihre Argumente benutzt
-- Kombination aus Usage für freie Variablen + UsageSig = Usage Type
+2 Minuten
+
+- Demand Analyser ermöglicht interprozeduralen Datenfluss über Signaturen, die angeben wie eine Funktion ihre Argumente benutzt
+- Jeder Ausdruck wird approximiert durch Usage auf freie Variablen + UsageSig = Usage Type
 - Um UsageSignaturen an den Call Sites verfügbar zu haben, wird der gebundene Ausdruck vor dem let body analysiert, top-down
 - Für Funktionen wird also die LetDn Regel benutzt: Usage types werden an Benutzungsstellen frei gelassen
 - Hier: Const benutzt nur sein erstes ARgument, daher die Usage Signature
 - An der Aufrufstelle wird dann y als einmal benutzt identifiziert und fac 1000 als tot
 
 # Thunks
+
+1 Minute
 
 - Bei Thunks funktioniert LetDn nicht so gut, weil die Auswertung der rechten Seite zwischen Aufrufen geteilt wird
 - hier hat `y` zwei Benutzungsstellen, mit LetDn daher zwei Benutzungen von `x`
@@ -108,6 +92,8 @@
 - Das wäre schon alles wichtige zum Demand Analyser (vielleicht Fragen?)
 
 # Call Arity
+
+3 Minuten
 
 1. Grundsätzliche Idee: Eta-Expansion basierend darauf, wie Bindings benutzt werden  
   - Hier: `f` wird immer mit zwei Argumenten aufgerufen, Sharing ist so nie sichtbar
@@ -125,11 +111,13 @@
 
 # Call Arity (Co-call graphs)
 
+2-3 Minuten
+
 1. Called once information wird durch eine Usage Analyse berechnet  
   - Damit rechte Seite in abhängigkeit von Anzahl Argumenten analysiert werden kann, muss body vor RHS analysiert werden
   - Wie LetUp bottom-up
   - LetUp aber zu unpräzise, wie dieser Fall zeigt
-  - Hier wird vergessen, dass x und y nie zusammen aufgerufen werden
+  - Hier wird vergessen, dass x und y nie zusammen ausgewertet werden
   - dann wird die rechte Seite von y freigelassen: x wird mehrfach benutzt
 2. Deswegen hat sich Joachim Co-call Graphen ausgedacht
   - Merken sich Kontrollflussinformationen
@@ -144,6 +132,8 @@
 
 # Combined Usage Analysis
 
+1 Minute
+
 - Idee für kombinierte Usage Analyse:  
   - Nimm Usage Analyse vom Demand Analyser
   - Füge Co-Call graphen hinzu, um single-entry thunks zu verfolgen
@@ -152,18 +142,20 @@
 
 # Call Arity vs. Demand Analysis
 
+4 Minuten
+
 1. Schauen wir uns mal das untere Beispiel an  
-- Wichtig ist hier, wie oft `z` ausgewertet wird, tatsächlich nur einmal
-- Demand Analysis analysiert das let binding aber mit der LetDn Regel, also top-down, weil `f` kein Thunk ist
-- Um einen Usage type für `f` parat zu haben, nimmt Demand Analysis einen aufruf mit manifest arity an, das ist die Anzahl führender Lambdas, hier 1
-- Das reicht aber nicht, um 'unter das innere Lambda' zu gucken
-- Muss daher konservativ annehmen, dass `z` mehrfach ausgewertet wird
-- Tatsächlich wird `f` aber mit zwei Argumenten aufgerufen, dieser Use hier
-- Hätte man die rechte Seite vorher in dem Use analysiert, würde man dsa gewünschte Ergebnis erzielen
-2. Call Arity erbringt hier das gewünschte, weil die nötige Arity information von unten nach oben fließt (LetUp, hat dafür keine Usage Signaturen)
-- Meine Lösung: Rechte Seite erst analysieren wenn gefordert, dann ist der präzise Use bekannt
-- Erste Ideen basierten darauf, irgendwie laziness auszunutzen
-- Das habe ich aber schnell wieder verworfen
+  - Wichtig ist hier, wie oft `z` ausgewertet wird, tatsächlich nur einmal
+  - Demand Analysis analysiert das let binding aber mit der LetDn Regel, also top-down, weil `f` kein Thunk ist
+  - Um einen Usage type für `f` parat zu haben, nimmt Demand Analysis einen aufruf mit manifest arity an, das ist die Anzahl führender Lambdas, hier 1
+  - Das reicht aber nicht, um 'unter das innere Lambda' zu gucken
+  - Muss daher konservativ annehmen, dass `z` mehrfach ausgewertet wird
+  - Tatsächlich wird `f` aber mit zwei Argumenten aufgerufen, dieser Use hier
+  - Hätte man die rechte Seite vorher in dem Use analysiert, würde man dsa gewünschte Ergebnis erzielen
+2. Call Arity erbringt hier das gewünschte, weil die nötige Arity information von unten nach oben fließt (LetUp, hat dafür keine Usage Signaturen)  
+  - Meine Lösung: Rechte Seite erst analysieren wenn gefordert, dann ist der präzise Use bekannt
+  - Erste Ideen basierten darauf, irgendwie laziness auszunutzen
+  - Das habe ich aber schnell wieder verworfen
 3. Denn sobald Rekursion ins Spiel kommt, bekommt man Terminationsprobleme  
   - Hier: `fac` ruft sich rekursiv auf. Um `fac`s usage type zu bestimmen, müsste man `fac`s usage type kennen
   - Wird sehr schnell sehr kompliziert, sogar noch ohne wechselseitige Rekursion
@@ -174,7 +166,9 @@
 
 # Transferfunktion
 
-- Effektiv denotieren wir Ausdrücke durch monotone usage transformer
+1.5 Minuten
+
+- Formal denotieren wir Ausdrücke durch monotone usage transformer
 - Ein Usage Transformer bildet den eigehenden use auf den zugehörigen usage type (also wie freie Variablen und Argumente benutzt werden) ab
 - Wie wir eben gesehen haben, ist Anzahl eingehender Argumente wichtige Information
 - Nur um einmal gezeigt zu haben, wie das dann formal aussieht, hier die Transferfunktion für nicht-rekursive let bindigns
@@ -184,11 +178,13 @@
 
 # Recovering Call Arity
 
+2.5 Minuten
+
 1. Meine Analyse verallgemeinert die Usage Analyse im Demand Analyser und ersetzt Call Arity
 - Daher muss man die Call Arity Information auch aus den USage resultaten gewinnen können
 - Wichtige Beobachtung: Eta-Expansion ändert nichts daran, wie Ausdrücke benutzt werden
 - Hier sieht man den Algorithmus den ich benutze, um bindings basierend auf usag einformationen zu eta-expanden
-- LEichter an ein paar Beispielen zu verstehen
+- Leichter an ein den Beispielen zu Call Arity zu verstehen
 2. `f` ist hier eine Funktion unter multi-call usage  
   - `f` ist kein Thunk, also ist die Auswertungsmultiplizität uninteressant
   - ab da kann man entsprechend der manifest arity (also der anzahl führender lambdas) viele Cs überspringen, hier 1
@@ -206,19 +202,25 @@
 
 # Implementation
 
+1 Minute
+
+- Noch ein paar Worte zur Implementierung
 - Gerade der Demand Analyser ist ein ziemlich zentraler Bestandteil vom GHC, Bugs haben sich an den unmöglichsten Stellen bemerkbar gemacht
 - Ansonsten führte eins zum anderen
 - Co-Call graphs müssen jetzt mit wesentlich mehr variablen umgehen, daher neue Repräsentation die effizient volle und dünne Graphen darstellt
 - Graphbasierte Fixpunktiteration hat mich einiges an Nerven gekostet
-- Terminationsprobleme, weil monotonie der approximierten usage transformer wichtig war und keine geeignete datenstruktur existiert
+- Monotonie der approximierten usage transformer wichtig für Termination! Es existiert keine geeignete datenstruktur
+- (Map, die nicht totale Ordnung der Schlüssel sondern nur Verband vorraussetzt)
 
 # Evaluation
+
+4 Minuten für alle overlays
 
 - Ich stelle hier zwei der gebenchmarkten Varianten vor, relativ zur baseline GHC 8.2.1
 - Variante 1: Volle Analyse, mit co-call graphen und den Veränderungen an LetDn
 - Variante 2: Keine co-call graphen, trotzdem LetDn
-- Gemessen habe ich Allokationen und die Anzahl ausgeführter Instruktionen, mit cachegrind gemessen
-- Artefakt Performance anhand der nofib Benchmark suite, Standard im GHC
+- Als Metrik dienen Allokationen und die Anzahl ausgeführter Instruktionen, mit cachegrind gemessen
+- Kompilat Performance anhand der nofib Benchmark suite, Standard im GHC
 - Compiler Perofmrnace während die Benchmark suite kompiliert wurde, sowie während der stage 2 compiler mit meinem optimierten stage 1 Compiler kompiliert wurde
 - GHC bootstrapping: bootstrpa compiler kompiliert stage 1 Compiler, der stage 1 Compiler kompiliert alle nötigen libraries und den stage 2 Compiler, der dann verwendet wird
 
@@ -229,13 +231,6 @@
 - Co-Call Graphen haben interessanterweise keinen großen Einfluss, wenn die verbesserte LetDn REgel aktiv ist
 - Tatsächlich wird auch das List fusion Beispiel, dass Call Arity motiviert, ohne co-call graphen optimiert
 
-# Executed Instructions
-
-- Schaut man auf die Anzahl ausgeführter Instruktionen sind die Unterschiede größer
-- Viele Ausreißer (keine Fluktuationen), obwohl ich keine Unterschiede im generierten Code feststellen konnte
-- Insgesamt gereicht es aber zu unserem Vorteil (-0.6%)
-- Co-Call graphen scheinen in isolierten Fällen einen kleinen Unterschied zu machen
-
 # Compiler Performance
 
 - Wie die ZAhlen zeigen, hat sich die Performance des Compilers durchgehend verschlechtert
@@ -244,7 +239,9 @@
 - daher wurde der stage 2 Compiler ohne optimierungen kompiliert, was sich auch in den Werten widerspiegelt
 - Auch wenn es die Zahlen nicht hergeben, gefühlt ist die Performance von Variante (2) deutlich besser und vor allem konsistenter
 
-# Related Work
+# Related Work (Backup?)
+
+- 2 Minuten
 
 - Ansätze kann aufteilen in welche die über Abstrakte Interpretation funktionieren und solche, die das problem über typsysteme angehen
 - Beide hier beschriebenen Analysen funktionieren über abstrakte Interpretation
@@ -256,6 +253,8 @@
 
 # Conclusion
 
+1.5 Minuten
+
 - Ich habe eine Usage Analyse geschrieben, die ihr Gegenstück im Demand Analyser und Call Arity verallgemeinert  
   - Als 'Beweis' für die Korrektheit führe ich die fehlenden Regressionen in der Benchmarksuite an
   - hat sich aber auch nicht viel verbessert
@@ -265,6 +264,60 @@
 - Auf lange Sicht wäre eine Integration in GHC denkbar, im Moment allerdings zu viel Neues
 - GHC könnte aber von den Ideen aus meiner Arbeit profitieren
 
+<hr/>
+
+# Zeit
+
+- Grundlagen (Motivation (1) + KA (2) + Usage Analysis (1) + Puffer (1)) = 5
+- Demand Analysis (1 + CU (1) + UsageSig (2) + Thunks (1)) = 5
+- Call Arity (2 + 3) = 5
+- Combined Usage Analysis (1) , Call Arity vs. Demand Analysis (4) = 5
+- Transferfunktion (1.5), REcovering Call Arity (2.5), Implementierung (1) = 5
+- Evaluation (3), Related Work (2), Conclusion (1.5) = 6.5
+
+- 31.5 Minuten
+
+<hr/>
+
+# Backup
+
+## Call-by-value (wahrscheinlich Backup)
+
+- 1 Minute
+- Wir können den Overhead vermeiden, der durch lazy evaluation (call-by-need) entsteht
+- Strikte bindings direkt ausgwertet werden
+- erlaubt weitere wichtige Optimierungen wie Unboxing von primitiven Typen um Allokationen komplett zu vermeiden
+- Blind die Auswertungsstrategie in Call-by-value ändern beeinflusst Terminationsverhalten
+- Daher: 'Welche bindings werden mind. einmal ausgewertet?'
+  - typische MinCard Frage, die von Strictness Analyse beantwortet wird
+- Hier: a und b sind strikt, was durch das Bang Pattern angedeutet wird
+
+## Call-by-name (Backup?)
+
+- 1 Minuten
+- In bestimmten Fällen kann der Compiler auch call-by-name statt call-by-need verwenden
+- Compiler verpflichtet sich, rechte Seiten von Bindings nur einmal auf WHNF auszuwerten
+- Dazu muss Call-by-need einmal berechnete Ergebnisse von sogenannten Thunks memoisieren
+- Wenn so ein Thunk nur höchstens einmal ausgewertet wird, ist das unnötig
+- solche single-entry thunks kann man in Funktionen verwandeln, um Thunk updates zu sparen
+- Dazu: 'Welche Bindings werden höchstens einmal ausgewertet'  
+  - MaxCard Frage, beantwortet durch Sharing Analysen
+- Im Beispiel durch zusätzliches unit argument angedeutet: b, d, e
+
+## Eta-expansion (Backup?)
+
+- < 1 Minute
+- Optimierung, die versucht, lambdas nach außen zu heben
+- Ist nicht immer sicher, weil Auswertungsarbeit von d hier dupliziert werden könnte
+- Weil zu hebendes Lambda aber one-shot ist, dürfen wir das! 
+- Der Körper wird nicht öfter ausgeführt als der umgebende Ausdruck
+
+## Executed Instructions (Backup?)
+
+- Schaut man auf die Anzahl ausgeführter Instruktionen sind die Unterschiede größer
+- Viele Ausreißer (keine Fluktuationen), obwohl ich keine Unterschiede im generierten Code feststellen konnte
+- Insgesamt gereicht es aber zu unserem Vorteil (-0.6%)
+- Co-Call graphen scheinen in isolierten Fällen einen kleinen Unterschied zu machen
 
 
 <!-- Markdeep: --><style class="fallback">body{visibility:hidden;white-space:pre;font-family:monospace}</style><script src="markdeep.min.js"></script><script src="https://casual-effects.com/markdeep/latest/markdeep.min.js"></script><script>window.alreadyProcessedMarkdeep||(document.body.style.visibility="visible")</script>
