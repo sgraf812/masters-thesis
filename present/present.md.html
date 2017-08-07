@@ -8,7 +8,8 @@
 
 # Motivation
 
-- 1 Minute
+1 Minute
+
 - GHC altes und mittelgroßes Softwareprojekt, >100k Zeilen Code, nicht immer einfach
 - Bringt die typischen softwaretechnischen Herausforderungen mit sich
 - Vor dem Hintergrund ... angesprochenen zwei Analysen, Call Arity und Demand Analysis, ... in Logik überlappen
@@ -17,7 +18,8 @@
 
 # Cardinality Analysis
 
-- 2 Minuten
+2 Minuten
+
 - Bevor wir uns den beiden Analysen zuwenden, beschäftigen wir uns zunächst mit Kardinalitätsanalysen
 - KA berechnet untere und obere Schranken dafür, wie oft etwas ausgewertet wird
 - In Anlehnung an Alias Analyse  
@@ -30,11 +32,13 @@
   - c möglicherweise gar nicht oder mehrmals
   - d möglicherweise einmal, aber nicht mehrmals
   - e ist tot
+- Solche bindings, die höchstens einmal ausgewertet werden, nennen wir single-entry
 - Aus Zeitgründen muss ich leider sämtliche Optimierungen überspringen
 
 # Usage Analysis
 
-- 1 Minute
+1 Minute
+
 - Damit sind wir schon bei Usage Analysen, dem eigentlichen Thema meiner Arbeit
 - Usage Analysen berechnen MaxCard Informationen, also obere Grenzen zu Auswertungskardinalitäten von Bindings
 - Verwandt: Identifikation von one-shot lambdas, also lambdas, die höchstens einmal aufgerufen werden  
@@ -50,7 +54,8 @@
 
 # Demand Analysis
 
-- 1 Minute
+1 Minute
+
 - Damit haben wir alle Grundlagen zusammen, um die beiden Analysen zu besprechen
 - GHC's Demand Analyser ist eine Kardinalitätsanalyse (berechnet also obere und untere Grenzen für Auswertungskardinalitäten)
 - Insbesondere bemüht der Demand Analyser eine Usage Analyse, um single-entry thunks, one-shot lambdas und tote Ausdrücke zu identifizieren
@@ -93,7 +98,7 @@
 
 # Call Arity
 
-3 Minuten
+>2 Minuten
 
 1. Grundsätzliche Idee: Eta-Expansion basierend darauf, wie Bindings benutzt werden  
   - Hier: `f` wird immer mit zwei Argumenten aufgerufen, Sharing ist so nie sichtbar
@@ -105,30 +110,22 @@
   - Eta-Expansion würde Sharing zunichte machen und den teuren Ausdruck mehrmals auswerten
 5. Hier ist `f` wieder ein Thunk, mit zwei Argumenten aufgerufen  
 6. Und weil `f` nur einmal aufgerufen wird, wird kein Sharing sichtbar  
-  - Eta-Expansion ist sicher
-  - Insbesondere zeigt das Beispiel auch, dass selbst in Situationen in denen statisch klar ist, dass `f` nur einmal aufgerufen wird, Inlining trotzdem nicht immer möglich ist
+  - Eta-Expansion ist sicherb
   - Called Once information also wichtig (für unsere Zwecke wie single-entry)
 
 # Call Arity (Co-call graphs)
 
-2-3 Minuten
+>1 Minute
 
-1. Called once information wird durch eine Usage Analyse berechnet  
-  - Damit rechte Seite in abhängigkeit von Anzahl Argumenten analysiert werden kann, muss body vor RHS analysiert werden
-  - Wie LetUp bottom-up
-  - LetUp aber zu unpräzise, wie dieser Fall zeigt
-  - Hier wird vergessen, dass x und y nie zusammen ausgewertet werden
-  - dann wird die rechte Seite von y freigelassen: x wird mehrfach benutzt
-2. Deswegen hat sich Joachim Co-call Graphen ausgedacht
-  - Merken sich Kontrollflussinformationen
-  - Kanten verbinden variablen, die möglicherweise zusammen ausgewertet werden
-  - Andersherum: Nichtvorhandensein einer Kante schließt gemeinsame Auswertung aus
-  - Schleifen modellieren called-once information
-  - Hier: Für den if Ausdruck haben wir Co-Call Graph gegeben
-  - x und y zusammen mit b ausgewertet, aber keine Kante zwischen beiden
-  - An let bindings findet subsitutionsschritt statt
-3. Usage type von y (besteht hier nur aus einem einzelnen Knoten x) wird hier in die Vorkommnisse von y im Typen vom Body eingesetzt und alle Knoten im Graphen mit allen Nachbarn von y verbunden
-4. Da x nicht mit y verbunden war, folgt daraus keine Schleife an x
+- Called once information wird durch eine Usage Analyse berechnet
+- Damit rechte Seite in abhängigkeit von Anzahl Argumenten analysiert werden kann, muss body vor RHS analysiert werden
+- Wie LetUp bottom-up
+- LetUp aber in manchen Fällen zu unpräzise
+- Deswegen hat sich Joachim Co-call Graphen ausgedacht
+- Merken sich Kontrollflussinformationen
+- Kanten verbinden variablen, die möglicherweise zusammen ausgewertet werden
+- Andersherum: Nichtvorhandensein einer Kante schließt gemeinsame Auswertung aus
+- Bei Fragen können wir später gerne das Beispiel durchgehen
 
 # Combined Usage Analysis
 
@@ -209,20 +206,20 @@
 - Ansonsten führte eins zum anderen
 - Co-Call graphs müssen jetzt mit wesentlich mehr variablen umgehen, daher neue Repräsentation die effizient volle und dünne Graphen darstellt
 - Graphbasierte Fixpunktiteration hat mich einiges an Nerven gekostet
-- Monotonie der approximierten usage transformer wichtig für Termination! Es existiert keine geeignete datenstruktur
+- Monotonie der approximierten usage transformer wichtig für Termination! 
+- Es existiert keine geeignete datenstruktur für monotone Abbildungen
 - (Map, die nicht totale Ordnung der Schlüssel sondern nur Verband vorraussetzt)
 
 # Evaluation
 
-4 Minuten für alle overlays
+3 Minuten für alle overlays
 
 - Ich stelle hier zwei der gebenchmarkten Varianten vor, relativ zur baseline GHC 8.2.1
 - Variante 1: Volle Analyse, mit co-call graphen und den Veränderungen an LetDn
 - Variante 2: Keine co-call graphen, trotzdem LetDn
 - Als Metrik dienen Allokationen und die Anzahl ausgeführter Instruktionen, mit cachegrind gemessen
 - Kompilat Performance anhand der nofib Benchmark suite, Standard im GHC
-- Compiler Perofmrnace während die Benchmark suite kompiliert wurde, sowie während der stage 2 compiler mit meinem optimierten stage 1 Compiler kompiliert wurde
-- GHC bootstrapping: bootstrpa compiler kompiliert stage 1 Compiler, der stage 1 Compiler kompiliert alle nötigen libraries und den stage 2 Compiler, der dann verwendet wird
+- Compiler Performance während die Benchmark suite kompiliert wurde, sowie während der Compiler mit sich selbst kompiliert wurde
 
 # Allocations
 
@@ -233,10 +230,9 @@
 
 # Compiler Performance
 
-- Wie die ZAhlen zeigen, hat sich die Performance des Compilers durchgehend verschlechtert
+- Wie die Zahlen zeigen, hat sich die Performance des Compilers durchgehend verschlechtert
 - Ist auch nicht verwunderlich, denn wir ersetzen einen Lauf von Call Arity durch 3 Läufe einer Analyse, die Call Arity verallgemeinert
 - Außerdem sei noch gesagt, dass der Speicherverbrauch von der Variante mit co-call graphen für eine Eingabedatei so in die Höhe geschossen ist, dass die 32GB der Referenzmaschine nicht zum kompilieren ausreichten
-- daher wurde der stage 2 Compiler ohne optimierungen kompiliert, was sich auch in den Werten widerspiegelt
 - Auch wenn es die Zahlen nicht hergeben, gefühlt ist die Performance von Variante (2) deutlich besser und vor allem konsistenter
 
 # Related Work (Backup?)
@@ -268,14 +264,14 @@
 
 # Zeit
 
-- Grundlagen (Motivation (1) + KA (2) + Usage Analysis (1) + Puffer (1)) = 5
+- Grundlagen (Motivation (1) + KA (2) + Usage Analysis (1)) = 4
 - Demand Analysis (1 + CU (1) + UsageSig (2) + Thunks (1)) = 5
-- Call Arity (2 + 3) = 5
+- Call Arity (2 + 2) = 4
 - Combined Usage Analysis (1) , Call Arity vs. Demand Analysis (4) = 5
 - Transferfunktion (1.5), REcovering Call Arity (2.5), Implementierung (1) = 5
-- Evaluation (3), Related Work (2), Conclusion (1.5) = 6.5
+- Evaluation (3), Related Work (1.5), Conclusion (1.5) = 6
 
-- 31.5 Minuten
+- 29 Minuten
 
 <hr/>
 
@@ -311,6 +307,27 @@
 - Ist nicht immer sicher, weil Auswertungsarbeit von d hier dupliziert werden könnte
 - Weil zu hebendes Lambda aber one-shot ist, dürfen wir das! 
 - Der Körper wird nicht öfter ausgeführt als der umgebende Ausdruck
+
+# Call Arity (Co-call graphs)
+
+1 Minute
+
+1. Called once information wird durch eine Usage Analyse berechnet  
+  - Damit rechte Seite in abhängigkeit von Anzahl Argumenten analysiert werden kann, muss body vor RHS analysiert werden
+  - Wie LetUp bottom-up
+  - LetUp aber zu unpräzise, wie dieser Fall zeigt
+  - Hier wird vergessen, dass x und y nie zusammen ausgewertet werden
+  - dann wird die rechte Seite von y freigelassen: x wird mehrfach benutzt
+2. Deswegen hat sich Joachim Co-call Graphen ausgedacht
+  - Merken sich Kontrollflussinformationen
+  - Kanten verbinden variablen, die möglicherweise zusammen ausgewertet werden
+  - Andersherum: Nichtvorhandensein einer Kante schließt gemeinsame Auswertung aus
+  - Schleifen modellieren called-once information
+  - Hier: Für den if Ausdruck haben wir Co-Call Graph gegeben
+  - x und y zusammen mit b ausgewertet, aber keine Kante zwischen beiden
+  - An let bindings findet subsitutionsschritt statt
+3. Usage type von y (besteht hier nur aus einem einzelnen Knoten x) wird hier in die Vorkommnisse von y im Typen vom Body eingesetzt und alle Knoten im Graphen mit allen Nachbarn von y verbunden
+4. Da x nicht mit y verbunden war, folgt daraus keine Schleife an x
 
 ## Executed Instructions (Backup?)
 

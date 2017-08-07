@@ -261,8 +261,8 @@
         \begin{haskell}
           let f x = 
                 if expensive
-                then id
-                else (*x)
+                then \y -> y
+                else \y -> y*x
           in f 1 2 + f 4 5
         \end{haskell}
       \end{minipage}
@@ -315,7 +315,7 @@
                 if expensive
                 then \x y -> y
                 else \x y -> y*x
-          in if b then f 1 2 else f 4 5
+          in f 1 2
         \end{haskell}
       \end{minipage}
     \end{center}
@@ -328,7 +328,7 @@
                 if expensive
                 then y
                 else y*x
-          in if b then f 1 2 else f 4 5
+          in f 1 2
         \end{haskell}
       \end{minipage}
     \end{center}
@@ -337,51 +337,12 @@
 
 \begin{frame}[fragile]{Call Arity}
   \framesubtitle{Co-call Graphs}
-  \begin{overprint}
-    \onslide<1>
-    \begin{itemize}
-      \item Called-once information is tracked by a usage analysis
-      \item Analyses \hs{let} body before bound expression, bottom-up, like \textsc{LetUp}
-      \item Ordinary \textsc{LetUp}-style usage analysis too imprecise
-        \begin{itemize}
-          \item Forgets that \hs{x} and \hs{y} were evaluated on different code paths
-          \item Analysis reports \hs{x} to be used multiple times
-        \end{itemize}
-    \end{itemize}
-
-    \onslide<2>
-    \begin{itemize}
-      \item \emph{Co-call graphs} track control flow information
-        \begin{itemize}
-          \item Edges connect variables possible evaluated on the same code path
-          \item Absence of an edge proves mutual exclusive calls
-          \item Usage information in self-edges
-        \end{itemize}
-      \item Lack of edge between \hs{x} and \hs{y} avoids self-edge on \hs{x}
-    \end{itemize}
-
-    \onslide<3>
-    \begin{itemize}
-      \item \emph{Co-call graphs} track control flow information
-        \begin{itemize}
-          \item Edges connect variables possible evaluated on the same code path
-          \item Absence of an edge proves mutual exclusive calls
-          \item Usage information in self-edges
-        \end{itemize}
-      \item Lack of edge between \hs{x} and \hs{y} avoids self-edge on \hs{x}
-    \end{itemize}
-
-    \onslide<4>
-    \begin{itemize}
-      \item \emph{Co-call graphs} track control flow information
-        \begin{itemize}
-          \item Edges connect variables possible evaluated on the same code path
-          \item Absence of an edge proves mutual exclusive calls
-          \item Usage information in self-edges
-        \end{itemize}
-      \item Lack of edge between \hs{x} and \hs{y} avoids self-edge on \hs{x}
-    \end{itemize}
-  \end{overprint}
+  \begin{itemize}
+    \item Called-once information is tracked by a usage analysis
+    \item Analyses \hs{let} body before bound expression, bottom-up, like \textsc{LetUp}
+    \item Ordinary \textsc{LetUp}-style usage analysis too imprecise
+    \item \emph{Co-call graphs} track control flow information
+  \end{itemize}
 
   \begin{columns}
     \begin{column}{0\textwidth}
@@ -394,32 +355,13 @@
       \end{haskell}
     \end{column}
     \begin{column}{0\textwidth}
-      \begin{overprint}
-        \onslide<2>
-        \begin{tikzpicture}
-          \node at (0,0) (0) {\hs{b}};
-          \node at (1,0.3) (1) {\hs{x}};
-          \node at (1,-0.3) (2) {\hs{y}};
-          \draw (0) -- (1);
-          \draw (0) -- (2);
-        \end{tikzpicture}
-
-        \onslide<3>
-        \begin{tikzpicture}
-          \node at (0,0) (0) {\hs{b}};
-          \node at (1,0.3) (1) {\hs{x}};
-          \node at (1,-0.3) (2) {\color{red}\texttt{x}};
-          \draw (0) -- (1);
-          \draw (0) -- (2);
-        \end{tikzpicture}
-
-        \onslide<4>
-        \begin{tikzpicture}
-          \node at (0,0) (0) {\hs{b}};
-          \node at (1,0) (1) {\hs{x}};
-          \draw (0) -- (1);
-        \end{tikzpicture}
-      \end{overprint}
+      \begin{tikzpicture}
+        \node at (0,0) (0) {\hs{b}};
+        \node at (1,0.3) (1) {\hs{x}};
+        \node at (1,-0.3) (2) {\hs{y}};
+        \draw (0) -- (1);
+        \draw (0) -- (2);
+      \end{tikzpicture}
     \end{column}
   \end{columns}
 \end{frame}
@@ -508,21 +450,6 @@
   \end{itemize}
   \begin{overprint}
     \onslide<1>
-    \[
-      \begin{array}{lcl}
-        \expand_{\sUsage}                              &\,\colon& \sUsage \to \mathbb{N} \to \mathbb{N} \\
-        \expand_{\sUsage}\,A\,\alpha                   &    =   & \alpha \\
-        \expand_{\sUsage}\,(\omega*\uscore[u])\,0      &    =   & 0 \\
-        \expand_{\sUsage}\,(\uscore[\omega]*u)\,\alpha &    =   & \expand_{\sUse}\,u\,\alpha \\
-        \\
-        \expand_{\sUse}                                &\,\colon& \sUse \to \mathbb{N} \to \mathbb{N} \\
-        \expand_{\sUse}\,C^\omega(u)\,0                &    =   & 0 \\
-        \expand_{\sUse}\,C^{\uscore}(u)\,\alpha        &    =   & 1 + \expand_{\sUsage}\,u\,(\max\,0\,(\alpha - 1)) \\
-        \expand_{\sUse}\,\uscore\,\alpha               &    =   & \alpha \\
-      \end{array}
-    \]
-
-    \onslide<2>
     \begin{center}
       \begin{minipage}[t][10cm][t]{0.5\textwidth}
         \begin{haskell}
@@ -535,7 +462,7 @@
       \end{minipage}
     \end{center}
 
-    \onslide<3>
+    \onslide<2>
     \begin{center}
       \begin{minipage}{0.5\textwidth}
         \begin{haskell*}{escapeinside=||}
@@ -548,7 +475,7 @@
       \end{minipage}
     \end{center}
 
-    \onslide<4>
+    \onslide<3>
     \begin{center}
       \begin{minipage}{0.5\textwidth}
         \begin{haskell}
@@ -561,7 +488,7 @@
       \end{minipage}
     \end{center}
 
-    \onslide<5>
+    \onslide<4>
     \begin{center}
       \begin{minipage}{0.5\textwidth}
         \begin{haskell}
@@ -574,7 +501,7 @@
       \end{minipage}
     \end{center}
 
-    \onslide<6>
+    \onslide<5>
     \begin{center}
       \begin{minipage}{0.5\textwidth}
         \begin{haskell}
@@ -587,7 +514,7 @@
       \end{minipage}
     \end{center}
 
-    \onslide<7>
+    \onslide<6>
     \begin{center}
       \begin{minipage}{0.5\textwidth}
         \begin{haskell*}{escapeinside=||}
@@ -600,7 +527,7 @@
       \end{minipage}
     \end{center}
 
-    \onslide<8>
+    \onslide<7>
     \begin{center}
       \begin{minipage}{0.5\textwidth}
         \begin{haskell*}{escapeinside=||}
@@ -634,7 +561,7 @@
     \item Measured allocations and executed instructions
       \begin{itemize}
         \item Artifact performance on nofib suite
-        \item Compiler performance compiling nofib and stage 2 compiler
+        \item Compiler performance compiling nofib and compiling itself
       \end{itemize}
   \end{itemize}
 \end{frame}
@@ -887,6 +814,95 @@
   \end{center}
 \end{frame}
 
+\begin{frame}[fragile]{Call Arity}
+  \framesubtitle{Co-call Graphs}
+  \begin{overprint}
+    \onslide<1>
+    \begin{itemize}
+      \item Called-once information is tracked by a usage analysis
+      \item Analyses \hs{let} body before bound expression, bottom-up, like \textsc{LetUp}
+      \item Ordinary \textsc{LetUp}-style usage analysis too imprecise
+        \begin{itemize}
+          \item Forgets that \hs{x} and \hs{y} were evaluated on different code paths
+          \item Analysis reports \hs{x} to be used multiple times
+        \end{itemize}
+    \end{itemize}
+
+    \onslide<2>
+    \begin{itemize}
+      \item \emph{Co-call graphs} track control flow information
+        \begin{itemize}
+          \item Edges connect variables possible evaluated on the same code path
+          \item Absence of an edge proves mutual exclusive calls
+          \item Usage information in self-edges
+        \end{itemize}
+      \item Lack of edge between \hs{x} and \hs{y} avoids self-edge on \hs{x}
+    \end{itemize}
+
+    \onslide<3>
+    \begin{itemize}
+      \item \emph{Co-call graphs} track control flow information
+        \begin{itemize}
+          \item Edges connect variables possible evaluated on the same code path
+          \item Absence of an edge proves mutual exclusive calls
+          \item Usage information in self-edges
+        \end{itemize}
+      \item Lack of edge between \hs{x} and \hs{y} avoids self-edge on \hs{x}
+    \end{itemize}
+
+    \onslide<4>
+    \begin{itemize}
+      \item \emph{Co-call graphs} track control flow information
+        \begin{itemize}
+          \item Edges connect variables possible evaluated on the same code path
+          \item Absence of an edge proves mutual exclusive calls
+          \item Usage information in self-edges
+        \end{itemize}
+      \item Lack of edge between \hs{x} and \hs{y} avoids self-edge on \hs{x}
+    \end{itemize}
+  \end{overprint}
+
+  \begin{columns}
+    \begin{column}{0\textwidth}
+      \begin{haskell}
+        let x = ...  
+        in let y = 2*x
+           in if b
+              then x
+              else y
+      \end{haskell}
+    \end{column}
+    \begin{column}{0\textwidth}
+      \begin{overprint}
+        \onslide<2>
+        \begin{tikzpicture}
+          \node at (0,0) (0) {\hs{b}};
+          \node at (1,0.3) (1) {\hs{x}};
+          \node at (1,-0.3) (2) {\hs{y}};
+          \draw (0) -- (1);
+          \draw (0) -- (2);
+        \end{tikzpicture}
+
+        \onslide<3>
+        \begin{tikzpicture}
+          \node at (0,0) (0) {\hs{b}};
+          \node at (1,0.3) (1) {\hs{x}};
+          \node at (1,-0.3) (2) {\color{red}\texttt{x}};
+          \draw (0) -- (1);
+          \draw (0) -- (2);
+        \end{tikzpicture}
+
+        \onslide<4>
+        \begin{tikzpicture}
+          \node at (0,0) (0) {\hs{b}};
+          \node at (1,0) (1) {\hs{x}};
+          \draw (0) -- (1);
+        \end{tikzpicture}
+      \end{overprint}
+    \end{column}
+  \end{columns}
+\end{frame}
+
 \begin{frame}[fragile]{\letupsc and \hs{seq}}
   \begin{center}
     \begin{minipage}{0.4\textwidth}
@@ -902,6 +918,26 @@
       \end{haskell}
     \end{minipage}
   \end{center}
+\end{frame}
+
+\begin{frame}[fragile]{Recovering Call Arity}
+  \begin{itemize}
+    \item Observation: (Safe) $\eta$-expansion does not change how an expression is used
+    \item Perform $\eta$-Expansion based on Usage results $n*u$
+  \end{itemize}
+  \[
+    \begin{array}{lcl}
+      \expand_{\sUsage}                              &\,\colon& \sUsage \to \mathbb{N} \to \mathbb{N} \\
+      \expand_{\sUsage}\,A\,\alpha                   &    =   & \alpha \\
+      \expand_{\sUsage}\,(\omega*\uscore[u])\,0      &    =   & 0 \\
+      \expand_{\sUsage}\,(\uscore[\omega]*u)\,\alpha &    =   & \expand_{\sUse}\,u\,\alpha \\
+      \\
+      \expand_{\sUse}                                &\,\colon& \sUse \to \mathbb{N} \to \mathbb{N} \\
+      \expand_{\sUse}\,C^\omega(u)\,0                &    =   & 0 \\
+      \expand_{\sUse}\,C^{\uscore}(u)\,\alpha        &    =   & 1 + \expand_{\sUsage}\,u\,(\max\,0\,(\alpha - 1)) \\
+      \expand_{\sUse}\,\uscore\,\alpha               &    =   & \alpha \\
+    \end{array}
+  \]
 \end{frame}
 
 \begin{frame}{Lambda Abstraction, Application, Variables}
