@@ -89,6 +89,7 @@
       Provides lower and upper bounds on \emph{evaluation cardinality}
       \begin{itemize} \item \MinCard and \MaxCard analyses \end{itemize}
     \item Notation: $[n,m]$, where $n,m \in \{0,1,\omega\}, n \leq m$
+    \item \emph{Single-entry} thunks: $[\uscore,1]$
   \end{itemize}
   \begin{center}
     \begin{minipage}{0.5\textwidth}
@@ -146,15 +147,16 @@
 \begin{frame}[fragile]{Demand Analyser}
   \framesubtitle{Call Uses}
   \begin{itemize}
-    \item Identification of one-shot lambdas needs tracking of \emph{how} a binding was used
-    \item Introduces \newdef{call uses} $C^n(u)$ in addition to the unknown use $U$
+    \item $n \in \sMulti \Coloneqq 1 \mid \omega$
+    \item $u \in \sUse \Coloneqq C^n(u) \mid U$
+    \item $\sUsage \Coloneqq A \mid n*u$
     \item \hs{f 1 2} exposes \hs{f} to usage $1*C^1(C^1(U))$
     \item \hs{f 1 2 + f 4 5} exposes \hs{f} to usage $\omega*C^\omega(C^1(U))$
   \end{itemize}
   \begin{center}
     \begin{minipage}{0.5\textwidth}
       \begin{haskell*}{escapeinside=||}
-        let f |$\mathtt{x}^\omega$| |$\mathtt{y}^1$| = ...
+        let f |$\mathtt{x}^\omega$| |$\mathtt{y}^1$| = ... -- $\omega*C^\omega(C^1(U))$
         in f 1 2 + f 4 5
       \end{haskell*}
     \end{minipage}
@@ -165,17 +167,15 @@
   \framesubtitle{Usage Signatures}
   \begin{itemize}
     \item Interprocedural data-flow
-    \item Usage signature + free variable usage = \newdef{usage type}
-    \item Looks at the definition of \hs{const} before the \hs{let} body!
-      \begin{itemize} 
-        \item \textsc{LetDn} rule: Unleashes usage types of \hs{const} at call sites
-      \end{itemize}
+    \item Looks at the RHS of \hs{const} before the \hs{let} body!
+    \item \emph{Usage type} ($\sUType$): $\lPair{\text{Free variable \sUsage}}{\text{Usage signature}}$
+    \item \textsc{LetDn} rule: \emph{Unleashes} usage type of \hs{const}'s RHS at call sites
   \end{itemize}
 
   \begin{center}
-    \begin{minipage}{0.5\textwidth}
+    \begin{minipage}{0.8\textwidth}
       \begin{haskell}
-        let const a b = a -- $\mathtt{const} :: 1*U \to A \to \bullet$
+        let const a b = a -- $\mathtt{const}_{rhs} :: \lPair{\emptymap}{1*U \to A \to \bullet}$
         in const 
             y             -- $1*U$
             (fac 1000)    -- $A$
@@ -193,34 +193,57 @@
       \begin{itemize} 
         \item \textsc{LetDn}-style leads to usage of $\omega*U$ on \hs{x}! 
       \end{itemize}
-    \item Solution: \textsc{LetUp} for thunks
+    \item<2-3> Solution: \textsc{LetUp} for thunks
       \begin{itemize} 
         \item Record usage $\omega*U$ of \hs{y} in the body of the \hs{let}
-        \item Analyse \hs{y}'s bound expression in use $U$, unleash its usage type
+        \item Analyse \hs{y}'s bound expression once in use $U$, unleash its usage type
       \end{itemize}
   \end{itemize}
-  \begin{center}
-    \begin{minipage}{0.5\textwidth}
-      \begin{haskell*}{escapeinside=||}
-        let y = 2*x
-        in y + y
-      \end{haskell*}
-    \end{minipage}
-  \end{center}
+  \begin{overprint}
+    \onslide<1>
+    \begin{center}
+      \begin{minipage}{0.6\textwidth}
+        \begin{haskell*}{escapeinside=||}
+          let y = 2*x -- $\mathtt{y}_{rhs} :: \lPair{\maplit{\mathtt{x}}{1*U}}{\bullet}$
+          in y + y
+        \end{haskell*}
+      \end{minipage}
+    \end{center}
+
+    \onslide<2>
+    \begin{center}
+      \begin{minipage}{0.6\textwidth}
+        \begin{haskell*}{escapeinside=||}
+          let y = 2*x 
+          in y + y    -- $:: \lPair{\maplit{\mathtt{y}}{\omega*U}}{\bullet}$
+        \end{haskell*}
+      \end{minipage}
+    \end{center}
+
+    \onslide<3>
+    \begin{center}
+      \begin{minipage}{0.6\textwidth}
+        \begin{haskell*}{escapeinside=||}
+          let y = 2*x -- $:: \lPair{\maplit{\mathtt{x}}{1*U}}{\bullet}$ 
+          in y + y    
+        \end{haskell*}
+      \end{minipage}
+    \end{center}
+  \end{overprint}
 \end{frame}
 
 \begin{frame}[fragile]{Call Arity}
   \begin{overprint}
     \onslide<1>
     \begin{itemize}
-      \item $\eta$-expansion based on usage information
+      \item $\eta$-expansion based on usage information to guarantee safety
       \item \hs{f} is always called with two arguments
       \item<2> \hs{f}'s bound expression can be $\eta$-expanded!
     \end{itemize}
 
     \onslide<2>
     \begin{itemize}
-      \item $\eta$-expansion based on usage information
+      \item $\eta$-expansion based on usage information to guarantee safety
       \item \hs{f} is always called with two arguments
       \item<2> \hs{f}'s bound expression can be $\eta$-expanded!
     \end{itemize}
@@ -250,7 +273,6 @@
       \item Can we $\eta$-expand \hs{f} here?
       \item \hs{f} is a thunk, called with two arguments
       \item Since \hs{f} is only \emph{called once}, $\eta$-expansion is safe
-      % Also demnostrates why we can't generally just inline \hs{f}
     \end{itemize}
   \end{overprint}
 
@@ -339,7 +361,7 @@
   \framesubtitle{Co-call Graphs}
   \begin{itemize}
     \item Called-once information is tracked by a usage analysis
-    \item Analyses \hs{let} body before bound expression, bottom-up, like \textsc{LetUp}
+    \item Like \textsc{LetUp}: Analyses \hs{let} body before RHS, bottom-up
     \item Ordinary \textsc{LetUp}-style usage analysis too imprecise
     \item \emph{Co-call graphs} track control flow information
   \end{itemize}
@@ -370,7 +392,7 @@
   \begin{itemize}
     \item Idea: Extend usage analysis of the Demand Analyser
     \item Add co-call graphs to usage types for tracking single-entry thunks
-    \item Glorified \textsc{LetDn}-style analysis with precise call uses for functions
+    \item \textsc{LetDn}-style analysis with precise call uses for functions
   \end{itemize}
 \end{frame}
 
@@ -392,22 +414,38 @@
     \end{itemize}
   \end{overprint}
 
-  \begin{center}
-    \begin{minipage}{0.5\textwidth}
-      \begin{haskell*}{escapeinside=||}
-        let f x = 
-              if expensive
-              then \y -> y*|\color{red}\texttt{z}|
-              else \y -> y*x
-        in f 1 2
-      \end{haskell*}
-    \end{minipage}
-  \end{center}
+  \begin{overprint}
+    \onslide<1>
+    \begin{center}
+      \begin{minipage}{0.7\textwidth}
+        \begin{haskell*}{escapeinside=||}
+          let f x = -- $\mathtt{f}_{rhs} :: \lPair{\maplit{\mathtt{z}}{\omega*U}}{\omega*U\to \bullet}$
+                if expensive
+                then \y -> y*|\color{red}\texttt{z}|
+                else \y -> y*x
+          in f 1 2
+        \end{haskell*}
+      \end{minipage}
+    \end{center}
+
+    \onslide<2>
+    \begin{center}
+      \begin{minipage}{0.7\textwidth}
+        \begin{haskell*}{escapeinside=||}
+          let f x = -- $\mathtt{f}_{rhs} :: \lPair{\maplit{\mathtt{z}}{1*U}}{1*U\to 1*U \to \bullet}$
+                if expensive
+                then \y -> y*|\color{red}\texttt{z}|
+                else \y -> y*x
+          in f 1 2
+        \end{haskell*}
+      \end{minipage}
+    \end{center}
+  \end{overprint}
 \end{frame}
 
 \begin{frame}[fragile]{Combined Usage Analysis}
   \begin{itemize}
-    \item Glorified \textsc{LetDn}-style analysis with precise call uses for functions
+    \item  \textsc{LetDn}-style analysis with precise call uses for functions
       \begin{itemize} \item Analyse bound function on demand, when we know specific call use \end{itemize}
     \item Recursion leads to termination problems
     \item Rediscovered fixed-point iteration, detached from the syntax tree
@@ -428,9 +466,9 @@
 
 \begin{frame}{Transfer Function}
   \begin{itemize}
-    \item Specification denotes expressions by (monotone) \newdef{usage transformers}
+    \item Usage type depends on how the expression is used (\eg arity)
+    \item Specification denotes expressions by \newdef{usage transformers}
     \item $\sUTrans = \sUse \to \sUType$
-    \item Reflects dependency on incoming use (\eg arity)
     \item $\transfer{\uscore}{\uscore[\rho]} : \sExp \to \sTransEnv \to \sUTrans$
   \end{itemize}
   \begin{alignat*}{2}
@@ -547,7 +585,6 @@
     \item Central part of GHC, changes with many repercussions
     \item Co-call graphs: Efficient representation of sparse and dense cases
     \item Solving the data-flow problem through graph-based fixed-point iteration
-    \item Monotonicity issues due to a lack of appropriate data structures for monotone maps
   \end{itemize}
 \end{frame}
 
@@ -556,7 +593,7 @@
     \item Benchmarked two variants, baseline GHC 8.2.1
       \begin{itemize}
         \item Full analysis, with co-call graphs \varfull
-        \item Without co-call graphs, but with glorified \textsc{LetDn} \varedges
+        \item Without co-call graphs, but with use-sensitive \textsc{LetDn} \varedges
       \end{itemize}
     \item Measured allocations and executed instructions
       \begin{itemize}
@@ -622,12 +659,13 @@
       \begin{itemize}
         \item Call Arity \parencite{callarity}
         \item Demand Analysis \parencite{card}
-        \item 80's and 90's: Projection-based strictness analysis \parencite{projs,projimpl}
+        \item 80's and 90's: Projection-based strictness analysis \parencite{wadlerproj,projimpl,projs}
       \end{itemize}
     \item Type Systems
       \begin{itemize}
-        \item Linear/Uniqueness types
-        \item 90's until today
+        \item Uniqueness types 
+        \item 90's until today \parencite{type,polytype,warnsbrough,sharing}
+        \item Recent thesis by \textcite{verstoepthesis}, planned integration into UHC \parencite{verstoep}
         \item Polymorphism, subtyping, data type annotations problematic for performance \parencite{card}
       \end{itemize}
   \end{itemize}
@@ -645,7 +683,7 @@
     \item Future work
       \begin{itemize}
         \item `Novel' approach to fixed-point iteration, detached from syntax tree
-        \item Data structure for monotone maps
+        \item Data structure for (monotone) maps, indexed by partial order
         \item Long term: Integration into GHC
       \end{itemize}
   \end{itemize}
