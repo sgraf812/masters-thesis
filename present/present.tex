@@ -49,6 +49,11 @@
     {\mathmakebox[\maxwidthofm{#1}{#2}]{#2}\vphantom{#1#2}}
 }
 
+\definecolor{myred}{HTML}{cc4125}
+\definecolor{mygreen}{HTML}{6aa84f}
+%\definecolor{myblue}{HTML}{42A1F4}
+\definecolor{myblue}{HTML}{75A3CB}
+
 \newcommand<>*{\nodealert}[1]{\only#2{\draw[overlay,mythick,color=green!80!black] (#1.north west) rectangle (#1.south east)}}
 
 \input{defs.tex}
@@ -937,6 +942,125 @@
           \draw (0) -- (1);
         \end{tikzpicture}
       \end{overprint}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{\letupsc and \hs{seq}}
+  $\mathtt{seq}_{rhs} :: \lPair{\emptymap}{1*HU \to 1*U \to \bullet}$
+  \begin{center}
+    \begin{minipage}{0.4\textwidth}
+      \begin{haskell}
+        let t = -- $\omega*C^1(U)$
+              if expensive
+              then \x -> x
+              else \x -> x*2
+        in seq t (t 15)
+      \end{haskell}
+    \end{minipage}
+  \end{center}
+\end{frame}
+
+\begin{frame}[fragile]{Fusion}
+  \begin{center}
+    \begin{minipage}{0.6\textwidth}
+      \begin{haskell}
+        let go x =
+             let r = 
+                  if x == 2016
+                  then id 
+                  else go (x + 1)
+             in if f x 
+                then \a -> r (a + x)
+                else r
+        in go 42 0
+      \end{haskell}
+    \end{minipage}
+  \end{center}
+\end{frame}
+
+\begin{frame}[fragile]{Strict Improvement}
+  \begin{center}
+    \begin{minipage}{0.7\textwidth}
+      \begin{overprint}
+        \onslide<1>
+        \begin{haskell}
+          let f x =
+                  if expensive 
+                  then \y -> y 
+                  else \y -> y*x
+          in let g f = f
+             in g f 1 2
+        \end{haskell}
+
+        \onslide<2>
+        \begin{haskell}
+          let f x y =
+                  if expensive 
+                  then y 
+                  else y*x
+          in let g f x y = f x y
+             in g f 1 2
+        \end{haskell}
+      \end{overprint}
+    \end{minipage}
+  \end{center}
+\end{frame}
+
+\begin{frame}[fragile]{Graph-based Fixed-point iteration}
+  \begin{columns}
+    \begin{column}{0.4\textwidth}
+      \begin{center}
+        \begin{overprint}
+          \onslide<1>
+          \begin{haskell}
+            module Main (main) where
+
+            fac n = 
+              if n == 0 
+              then 1 
+              else n * fac (n - 1)
+
+            main = print (fac 12)
+          \end{haskell}
+          \onslide<2>
+          \begin{haskell}
+            let fac n =
+                  if n == 0
+                  then 1
+                  else n * fac (n - 1)
+            in let main = print (fac 12)
+               in main
+          \end{haskell}
+        \end{overprint}
+      \end{center}
+    \end{column}
+    \begin{column}{0.6\textwidth}
+      \begin{figure}
+        \centering
+        \begin{tikzpicture}[shorten >=1pt,x=10em,y=7em,auto,scale=0.5, every node/.style={scale=0.5}]
+            \tikzset{every loop/.style={looseness=4}}
+            \tikzstyle{n}=[draw,shape=circle,minimum size=5em,inner sep=0pt]
+            \tikzstyle{root}=[n,fill=myred]
+            \tikzstyle{up}=[n,fill=myblue]
+            \tikzstyle{down}=[n,fill=mygreen]
+            \node (root) at (0,2) [root] {$(\hs{root}, U)$};
+            \node (let1) at (1,2) [up] {$(\keyword{let}_1, U)$};
+            \node (let2) at (2,2) [up] {$(\keyword{let}_2, U)$};
+            \node (main) at (2,1) [down] {$(\hs{main}, U)$};
+            \node (fac1) at (1.5,0) [down] {$(\hs{fac}, C^1(U))$};
+            \node (facn) at (1,1) [down] {$(\hs{fac}, U)$};
+            \path[->,line width=0.5pt] 
+              (root) edge node {} (let1)
+              (let1) edge [loop above] node {} ()
+                     edge node {} (let2)
+                     edge node {} (facn)
+              (let2) edge node {} (main)
+              (main) edge node {} (fac1)
+              (facn) edge node {} (fac1)
+              (fac1) edge [loop below] node {} ();
+        \end{tikzpicture}
+      \end{figure}
     \end{column}
   \end{columns}
 \end{frame}
