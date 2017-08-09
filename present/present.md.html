@@ -34,11 +34,11 @@
   - d möglicherweise einmal, aber nicht mehrmals
   - e ist tot
 - Solche bindings, die höchstens einmal ausgewertet werden, nennen wir single-entry
-- Aus Zeitgründen muss ich leider sämtliche Optimierungen überspringen
+- Optimierung durch Änderung der Auswertungsstrategie von call-by-need zu call-by-value oder call-by-name
 
 # Usage Analysis
 
-1 Minute
+2 Minute
 
 - Damit sind wir schon bei Usage Analysen, dem eigentlichen Thema meiner Arbeit
 - Usage Analysen berechnen MaxCard Informationen, also obere Grenzen zu Auswertungskardinalitäten von Bindings
@@ -49,13 +49,15 @@
   - falls nicht verstanden: Partielle Funktionsanwendung wertet einmal zu innerem lambda Ausdruck aus, der dann relative genau einmal aufgerufen wird
 - g dagegen wird nur einmal aufgerufen, daher alle lambdas one-shot
 - Ermöglicht wichtige Optimierungen:  
-  - let floating  
+  - let floating: Bindings näher an Benutzungsstellen  
     - `c` kann nicht hineingezogen werden, weil lambda nicht one-shot und dadurch Arbeit dupliziert werden würde
     - `d` kann hineingezogen werden: `\w` ist one-shot; der Körper wird nicht öfter ausgeführt als der umgebende Ausdruck
-  - eta expansion  
-    - one-shot lambdas dürfen eta-expandiert werden
+  - eta expansion: Lambdas nach außen ziehen
+    - I.A. keine sichere Optimierung, weil Arbeit dupliziert werden könnte
+    - eta-expansion von one-shot lambdas ist sicher
     - `\w` hier
-  - inlining unter one-shot lambdas ist erlaubt
+  - inlining unter one-shot lambdas ist erlaubt  
+    - d.h. wir könnten `d` auch direkt inlinen
 
 # Demand Analysis
 
@@ -72,12 +74,12 @@
 2 Minuten
 
 - Demand Analyser annotiert Bindings mit ihrer Usage
-- So sieht die Syntax dazu aus
+- So sieht die Syntax dazu aus, die uns durch den Vortrag begleiten wird
 - Usage Informationen besteht zum Einen aus einer Kardinalitskomponente, die beschreibt, wie *oft* ein Binding ausgewertet wurde  
   - $A$: Absent, n*u: höchstens n mal benutzt, jedes Mal in Use $u$
 - Die Use Komponente beschreibt, *wie* das Binding ausgewertet wurde, durch eine $U$-terminierte Kette von Call uses
 - $U$ entspricht einer unbekannten Benutzung, Top Element
-- Ein Call use $C^n(\_)$ entspricht der Tatsache, dass der Ausdruck höchstens $n$ mal aufgerufen wurde
+- Call use $C^n(\_)$ trägt Information, dass der Ausdruck höchstens $n$ mal aufgerufen wurde
 - Modelliert one-shot Information
 - Im Beispiel:  
 - Hier wird f folgender Usage ausgesetzt: höchstens einmal ausgewertet, dann höchstens einmal aufgerufen und das Ergebnis höchstens einmal aufgerufen
@@ -88,26 +90,28 @@
 
 2 Minuten
 
-- Demand Analyser annotiert Funktionen mit Usage Signaturen für interprozeduralen Datenfluss
-- Hier: Const benutzt nur sein erstes Argument, daher die Usage Signature in dieser Syntax
+- Demand Analyser annotiert Funktionen mit Usage Signatur für interprozeduralen Datenfluss
+- Beispiel: const  
+  - Syntax für UsageSig
+  - benutzt nur erstes Argument einmal, zweites gar nicht
 - An der Aufrufstelle wird dann y als einmal benutzt identifiziert und fac 1000 als tot
-- Um UsageSignaturen für die **gebundene Variable** an den Call Sites verfügbar zu haben, wird die **rechte Seite** vor dem **let body** analysiert, top-down
+- Um die Usage Signatur für die **gebundene Variable** an den Call Sites verfügbar zu haben, wird die **rechte Seite** vor dem **let body** analysiert, top-down
 - Jeder Ausdruck wird approximiert durch seinen Usage Type: Gibt an, wie freie Variablen benutzt werden + UsageSig
-- Für Funktionen wird also die LetDn Regel benutzt: Usage types werden an Benutzungsstellen *frei gelassen*
+- Bei Let bindings für Funktionen wird also die LetDn Regel benutzt: Vorher berechnete Usage types von rechten Seiten werden an Benutzungsstellen *frei gelassen*
 
 # Thunks
 
-1 Minute
+2 Minute
 
 - Bei Thunks funktioniert LetDn nicht so gut, weil die Auswertung der rechten Seite zwischen Aufrufen geteilt wird
-- In diesem Beispiel wird `x` eigentlich nur einmal ausgewertet
+- Zum Beispiel wird `x` eigentlich nur einmal ausgewertet
 - `y` hat zwei Benutzungsstellen, LetDn lässt an jeder Benutzungsstelle den UsageType von `y`s rechter Seite frei
 - Mit LetDn daher zwei Benutzungen von `x`
 - Daher bei Thunks LetUp: Erst let body analysieren, Usage merken und dann rechte Seite in dem festgehaltenen Use, hier $U$, analysieren
 
 # Call Arity
 
->2 Minuten
+2 Minuten
 1. Damit wären wir schon bei Joachims Call Arity Analyse.
    Grundsätzliche Idee: Eta-Expansion basierend darauf, wie Bindings benutzt werden  
   - Hier: `f` wird immer mit zwei Argumenten aufgerufen, Sharing ist so nie sichtbar
@@ -126,7 +130,7 @@
 
 # Call Arity (Co-call graphs)
 
->1 Minute
+1 Minute
 
 - Called once information wird durch eine Usage Analyse berechnet
 - Wie bei LetUp wird body vor RHS analysiert
@@ -136,7 +140,6 @@
 - Merken sich Kontrollflussinformationen
 - Kanten verbinden variablen, die möglicherweise zusammen ausgewertet werden
 - Andersherum: Nichtvorhandensein einer Kante schließt gemeinsame Auswertung aus
-- Bei Fragen können wir später gerne das Beispiel durchgehen
 
 # Combined Usage Analysis
 
@@ -146,7 +149,7 @@
 - Meine Idee für kombinierte Usage Analyse:  
   - Nimm Usage Analyse vom Demand Analyser
   - Füge Co-Call graphen hinzu, um single-entry thunks zu verfolgen
-  - Im Fall von Funktionen (also LetDn) werden präzisere call uses an die rechten Seiten weitergegeben
+  - LetDn verfeinert, indem präzise Aufrufinformation an die rechten Seiten weitergegeben wird
 - Was das heißt, sehen wir am besten an einem Beispiel
 
 # Call Arity vs. Demand Analysis
@@ -163,7 +166,7 @@
   - Hätte man die rechte Seite vorher in dem Use analysiert, würde man dsa gewünschte Ergebnis erzielen
 2. Call Arity erbringt hier das gewünschte, weil die nötige Arity information von unten nach oben fließt (LetUp, hat dafür keine Usage Signaturen)  
   - Meine Lösung: Rechte Seite erst analysieren wenn gefordert, dann ist der präzise Use bekannt
-  - Erste Ideen basierten darauf, irgendwie laziness auszunutzen
+  - Erste Ideen basierten darauf, endlich viele Typen vorzuberechnen und irgendwie laziness auszunutzen
   - Das habe ich aber schnell wieder verworfen
 3. Denn sobald Rekursion ins Spiel kommt, bekommt man Terminationsprobleme  
   - Hier: `fac` ruft sich rekursiv auf. Um `fac`s usage type zu bestimmen, müsste man `fac`s usage type kennen
@@ -173,7 +176,7 @@
 
 # Transferfunktion
 
-2.5 Minuten
+2 Minuten
 
 - Wie wir gesehen haben, ist der Usage Type eines Ausdrucks immer auch davon abhängig, wie der Ausdruck benutzt wird
 - Formal denotieren wir Ausdrücke durch monotone usage transformer
@@ -181,10 +184,10 @@
 - TRansferfunktion ordnet jedem Ausdruck einen usage transformer zu
 - Dazu braucht es eine Umgebung von usage transformern für Aufrufe von freien Variablen
 - Wie die Umgebung befüllt wird sieht man sehr gut an der Regel für nicht-rekursive Let-bindings
-- Hier wird der usage transformer $\tau_1$ der rechten Seite der Transformer Umgebung als LetDn-Variante zugefügt
+- Hier wird der usage transformer $\tau_1$ der rechten Seite der Transformer Umgebung $\rho$ als LetDn-Variante zugefügt
 - Dann können wir den Usage Type des let bodys unter eingehendem use u berechnen
 - Und wenn dann die usage für die gebundene Variable $x_1$ bekannt ist, können wir mit der LetUp-Regel den Usage Type der rechten Seite bestimmen
-- Zum Schluss findet dann ein Schritt statt, der den Usage Type des Bodys mit dem der rechten Seite zusammenführt
+- Zum Schluss wird der Usage Type des Bodys mit dem der rechten Seite zusammengeführt
 
 # Recovering Call Arity
 
@@ -225,8 +228,8 @@
 
 - Ich stelle hier zwei der gebenchmarkten Varianten vor, relativ zur baseline GHC 8.2.1
 - Variante 1: Volle Analyse, mit co-call graphen und den Veränderungen an LetDn
-- Variante 2: Keine co-call graphen, trotzdem LetDn
-- Als Metrik dienen Allokationen und die Anzahl ausgeführter Instruktionen, mit cachegrind gemessen
+- Variante 2: Keine co-call graphen, trotzdem verfeinertes LetDn
+- Als Metrik dienen Allokationen und die Anzahl ausgeführter Instruktionen
 - Kompilat Performance anhand der nofib Benchmark suite, Standard im GHC
 - Compiler Performance während die Benchmark suite kompiliert wurde, sowie während der Compiler mit sich selbst kompiliert wurde
 
@@ -234,7 +237,7 @@
 
 - Erfreulicherweise keine Regressionen, Ziel erreicht
 - aber auch keine großen Verbesserungen
-- 98 weitere Benchmarks, die weniger als 0.4% Verbesserung gebracht haben
+- 98 weitere Benchmarks, die weniger als 0.2% Verbesserung gebracht haben
 - Co-Call Graphen haben interessanterweise keinen großen Einfluss, wenn die verbesserte LetDn REgel aktiv ist
 - Tatsächlich wird auch das List fusion Beispiel, dass Call Arity motiviert, ohne co-call graphen optimiert
 
@@ -247,18 +250,18 @@
 - Außerdem sei noch gesagt, dass der Speicherverbrauch von der Variante mit co-call graphen für eine Eingabedatei so in die Höhe geschossen ist, dass die 32GB der Referenzmaschine nicht zum kompilieren ausreichten
 - Auch wenn es die Zahlen nicht hergeben, gefühlt ist die Performance von Variante (2) deutlich besser und vor allem konsistenter
 
-# Related Work (Backup?)
+# Related Work
 
-- 2 Minuten
+- 2.5 Minuten
 
 - Ansätze kann man aufteilen in Abstrakte Interpretation funktionieren und solche, die das problem über typsysteme angehen
 - Beide hier beschriebenen Analysen funktionieren über abstrakte Interpretation
 - In den 80ern und 90ern hat viel Forschung zu Strictness Analyse stattgefunden (MinCard)
-- Das hat letztendlich auf den Ansatz von projection transformers geführt, die später demand transformer und damit meine usage transformer inspiriert haben
-- Seit den 90ern bis heute wird an Typinferenz von Uniqueness types zur Usage Analyse geforscht
+- Das hat letztendlich auf den Ansatz von projections geführt, die später demand transformer und damit meine usage transformer inspiriert haben
+- Seit den 90ern bis heute wird an Usage Analyse durch Typinferenz von Uniqueness types geforscht
 - Zuletzt hat Verstoep den Ansatz aufgegriffen und betreibt Kardinalitätsanalyse mit einem Typsystem
 - Stand 2015 war, dass die Integration in den Utrecht Haskell Compiler geplant ist
-- Bis jetzt aber noch nicht vollzogen, daher keine Referenz
+- Bis jetzt aber noch nicht vollzogen, daher keine praktische Referenz
 - Theoretisch größere Präzision, gerade im interprozeduralen Fall
 - Typischerweise wird Polymorphismus mit Subtyping kombiniert
 - Führt zu einer Explosion von zu unifizierenden Typvariablen, weil Felder von Datentypen annotiert werden müssen

@@ -94,7 +94,7 @@
       Provides lower and upper bounds on \emph{evaluation cardinality}
       \begin{itemize} \item \MinCard and \MaxCard analyses \end{itemize}
     \item Notation: $[n,m]$, where $n,m \in \{0,1,\omega\}, n \leq m$
-    \item \emph{Single-entry} thunks: $[\uscore,1]$
+    \item \emph{Single-entry}: $[\uscore,1]$
   \end{itemize}
   \begin{center}
     \begin{minipage}{0.5\textwidth}
@@ -129,7 +129,7 @@
               f = \|$\mathtt{x}^\omega$| |$\mathtt{y}^1$| -> c*x + y
               g = \|$\mathtt{z}^1$| -> 
                     let d = ... 
-                    in \|$\mathtt{w}^1$| -> c*d + z*w
+                    in \|$\mathtt{w}^1$| -> d + z*w
           print (f 1 2 + f 4 5 * g 3 42)
       \end{haskell*}
     \end{minipage}
@@ -172,7 +172,7 @@
   \framesubtitle{Usage Signatures}
   \begin{itemize}
     \item Interprocedural data-flow
-    \item Looks at the RHS of \hs{const} before the \hs{let} body!
+    \item Looks at the right-hand side of \hs{const} before the \hs{let} body!
     \item \emph{Usage type} ($\sUType$): $\lPair{\text{Free variable \sUsage}}{\text{Usage signature}}$
     \item \textsc{LetDn} rule: \emph{Unleashes} usage type of \hs{const}'s RHS at call sites
   \end{itemize}
@@ -474,6 +474,7 @@
     \item Usage type depends on how the expression is used (\eg arity)
     \item Specification denotes expressions by \newdef{usage transformers}
     \item $\sUTrans = \sUse \to \sUType$
+    \item $\sTransEnv = \sVar \pfun \sUTrans$
     \item $\transfer{\uscore}{\uscore[\rho]} : \sExp \to \sTransEnv \to \sUTrans$
   \end{itemize}
   \begin{alignat*}{2}
